@@ -32,7 +32,7 @@ export default async function Home() {
         {/* 1. Stats Grid */}
         <section className="grid grid-cols-2 gap-4">
           {/* Card: Total Registered */}
-          <div className="col-span-2 bg-gradient-to-br from-green-600 to-green-700 dark:from-green-800 dark:to-green-900 rounded-2xl p-5 text-white shadow-lg shadow-green-200 dark:shadow-none">
+          <div className="col-span-2 bg-linear-to-br from-green-600 to-green-700 dark:from-green-800 dark:to-green-900 rounded-2xl p-5 text-white shadow-lg shadow-green-200 dark:shadow-none">
             <div className="flex justify-between items-start">
               <div>
                 <p className="font-inter text-green-100 text-sm font-medium">Total Families</p>

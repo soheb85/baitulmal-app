@@ -75,7 +75,7 @@ export default function BeneficiariesListPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
       
       {/* --- Sticky Header --- */}
-      <div className="sticky top-0 z-10 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 px-4 pt-4 pb-2">
+      <div className="sticky top-0 z-10 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 pt-4 pb-2">
         <div className="flex items-center gap-3 mb-3">
            <Link href="/" className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
              <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
@@ -114,10 +114,10 @@ export default function BeneficiariesListPage() {
       </div>
 
       {/* --- List Content --- */}
-      <div className="px-4 py-4 space-y-3">
+      <div className="px-2 py-4 space-y-2">
          {list.map((item) => (
             <Link href={`/beneficiaries/${item._id}`} key={item._id}>
-               <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm active:scale-[0.98] transition-transform flex items-center justify-between">
+               <div className="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm active:scale-[0.98] transition-transform flex items-center justify-between">
                   
                   {/* Left Side: Avatar & Details */}
                   <div className="flex items-center gap-3 overflow-hidden">
