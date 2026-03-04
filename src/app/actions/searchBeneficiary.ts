@@ -12,38 +12,41 @@ export async function searchBeneficiary(query: string) {
   try {
     if (!query) return { success: false, message: "Please enter a valid number." };
 
-    // Clean the input (remove spaces/dashes)
     const cleanQuery = query.trim().replace(/[\s-]/g, '');
 
-    // --- FIX: Use Regex for Partial Matching ---
-    // "^" means "Starts with". So "^98" matches "98765..."
     const beneficiary = await Beneficiary.findOne({
       $or: [
-        // 1. Exact Match (Best Case)
         { aadharNumber: cleanQuery },
         { mobileNumber: cleanQuery },
-        
-        // 2. Partial Match (If exact not found)
         { mobileNumber: { $regex: "^" + cleanQuery, $options: "i" } },
         { aadharNumber: { $regex: "^" + cleanQuery, $options: "i" } }
       ]
     }).lean();
 
     if (!beneficiary) {
-      console.log("❌ No record found in DB.");
       return { success: false, message: "No record found. Please register first." };
     }
 
-    console.log("✅ Record found:", beneficiary.fullName);
-
-    // Manual Serialization (Convert Objects to Strings)
+    // --- FIX: Manual Serialization ---
     const serializedData = {
       ...beneficiary,
       _id: beneficiary._id.toString(),
       createdAt: beneficiary.createdAt ? new Date(beneficiary.createdAt).toISOString() : null,
       updatedAt: beneficiary.updatedAt ? new Date(beneficiary.updatedAt).toISOString() : null,
       
-      // Handle family members IDs
+      // Fix distributionHistory dates
+      distributionHistory: beneficiary.distributionHistory?.map((h: any) => ({
+        ...h,
+        date: h.date ? new Date(h.date).toISOString() : null,
+        _id: h._id ? h._id.toString() : undefined
+      })) || [],
+
+      // Fix todayStatus dates
+      todayStatus: beneficiary.todayStatus ? {
+        ...beneficiary.todayStatus,
+        date: beneficiary.todayStatus.date ? new Date(beneficiary.todayStatus.date).toISOString() : null
+      } : { status: null },
+
       familyMembersDetail: Array.isArray(beneficiary.familyMembersDetail) 
         ? beneficiary.familyMembersDetail.map((m: any) => ({
             ...m,

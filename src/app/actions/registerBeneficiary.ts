@@ -4,41 +4,56 @@
 import { connectDB } from "@/lib/mongoose";
 import Beneficiary from "@/models/Beneficiary";
 import { revalidatePath } from "next/cache";
+import { logAction } from "@/lib/logger"; // Imported logger
 
 export async function registerBeneficiary(formData: any) {
   await connectDB();
 
   try {
-    // 1. Check for Duplicates (Double Dipping)
+    // 1. Enhanced Duplicate Check for Aadhaar
     const existingAadhar = await Beneficiary.findOne({ aadharNumber: formData.aadharNumber });
     if (existingAadhar) {
-      return { success: false, message: "This Aadhaar Number is already registered!" };
+      const expiryYear = new Date(existingAadhar.verificationCycle.endDate).getFullYear();
+      return { 
+        success: false, 
+        message: `This Aadhaar is already registered for ${existingAadhar.fullName}. Valid until Ramzan ${expiryYear}.` 
+      };
     }
 
     const existingMobile = await Beneficiary.findOne({ mobileNumber: formData.mobileNumber });
     if (existingMobile) {
-      return { success: false, message: "This Mobile Number is already used by another family member!" };
+      return { success: false, message: "This Mobile Number is already used by another family!" };
     }
 
-    // 2. Validate Pincode Logic (Simple version for now)
-    // You can add your list of allowed pincodes here
+    // 2. Validate Pincode Logic
     const allowedPincodes = ["400024", "400070"]; 
-    
-    // If current address is NOT in allowed list
     if (!allowedPincodes.includes(formData.currentPincode)) {
-       return { success: false, message: `We do not serve the area: ${formData.currentPincode}` };
+       return { success: false, message: `Area ${formData.currentPincode} is not eligible for this scheme.` };
     }
 
-    // 3. Create Record
-    const newBeneficiary = await Beneficiary.create({
+    // 3. Create Record with 3-Year Cycle Initialization
+    const person = await Beneficiary.create({
       ...formData,
-      status: "ACTIVE", // Default active
+      status: "ACTIVE",
+      verificationCycle: {
+        startDate: new Date(),
+        isFullyVerified: true
+      },
     });
 
-    // 4. Refresh Dashboard Data
+    // --- LOG: Registration Action ---
+    await logAction(
+      "REGISTRATION",
+      person.fullName,
+      `New beneficiary registered from Pincode ${person.currentPincode}`
+    );
+
+    // 4. Refresh Cache
     revalidatePath("/");
+    revalidatePath("/beneficiaries");
+    revalidatePath("/distribution/check-in");
     
-    return { success: true, message: "Beneficiary Registered Successfully!" };
+    return { success: true, message: "Beneficiary Registered & Verified for 3 Years!" };
 
   } catch (error: any) {
     console.error("Registration Error:", error);

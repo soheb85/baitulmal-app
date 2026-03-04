@@ -1,15 +1,24 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { registerBeneficiary } from "@/app/actions/registerBeneficiary";
+import { updateBeneficiary } from "@/app/actions/updateBeneficiary";
+import { checkAadharDuplicate } from "@/app/actions/checkAadhar";
 import {
   Loader2,
   CheckCircle,
   AlertTriangle,
   UserPlus,
   Trash2,
+  Fingerprint,
+  Smartphone,
+  Home as HomeIcon,
+  ShieldCheck,
+  ChevronRight,
+  Users,
+  MapPin,
 } from "lucide-react";
 
 // --- Types ---
@@ -25,7 +34,6 @@ type FamilyMember = {
   maritalStatus: "SINGLE" | "MARRIED" | "DIVORCED";
 };
 
-// Common Problems for Tags
 const PROBLEM_TAGS = [
   "Widow",
   "No Income",
@@ -37,17 +45,21 @@ const PROBLEM_TAGS = [
   "Rented House",
 ];
 
-// --- HELPER FUNCTION: Defined OUTSIDE the component ---
-// This prevents the "impure function during render" error
 const generateUniqueId = () => {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  // Fallback for older browsers
-  return `member-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `member-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 };
 
-export default function RegisterForm() {
+interface RegisterFormProps {
+  initialData?: any;
+  isEditMode?: boolean;
+}
+
+export default function RegisterForm({
+  initialData,
+  isEditMode = false,
+}: RegisterFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{
@@ -55,39 +67,45 @@ export default function RegisterForm() {
     text: string;
   } | null>(null);
   const [customProblem, setCustomProblem] = useState("");
+  const [aadharStatus, setAadharStatus] = useState<{
+    exists: boolean;
+    message: string;
+    name?: string;
+  } | null>(null);
 
-  // --- State: Main Form Data ---
+  // --- Form State ---
   const [formData, setFormData] = useState({
-    fullName: "",
-    aadharNumber: "",
-    mobileNumber: "",
-    gender: "FEMALE",
-    husbandStatus: "ALIVE",
+    fullName: initialData?.fullName || "",
+    aadharNumber: initialData?.aadharNumber || "",
+    mobileNumber: initialData?.mobileNumber || "",
+    gender: initialData?.gender || "FEMALE",
+    husbandStatus: initialData?.husbandStatus || "ALIVE",
 
-    // These will be auto-calculated from familyMembers list
-    sons: 0,
-    daughters: 0,
-    otherDependents: 0,
-    earningMembersCount: 0,
-    totalFamilyIncome: 0,
+    // Stats (Auto-calculated)
+    sons: initialData?.sons || 0,
+    daughters: initialData?.daughters || 0,
+    otherDependents: initialData?.otherDependents || 0,
+    earningMembersCount: initialData?.earningMembersCount || 0,
+    totalFamilyIncome: initialData?.totalFamilyIncome || 0,
 
-    housingType: "OWN",
-    rentAmount: 0,
-
-    currentAddress: "",
-    aadharPincode: "",
-    currentPincode: "400024",
-
-    problems: [] as string[],
-    comments: "",
-    referencedBy: "",
+    housingType: initialData?.housingType || "OWN",
+    rentAmount: initialData?.rentAmount || 0,
+    currentAddress: initialData?.currentAddress || "",
+    aadharPincode: initialData?.aadharPincode || "",
+    currentPincode: initialData?.currentPincode || "400024",
+    problems: initialData?.problems || [],
+    comments: initialData?.comments || "",
+    referencedBy: initialData?.referencedBy || "",
   });
 
-  // --- State: Family Members List ---
-  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
-  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>(
+    initialData?.familyMembersDetail?.map((m: any) => ({
+      ...m,
+      id: m.id || m._id || generateUniqueId(),
+    })) || [],
+  );
 
-  // Temporary state for the "Add New Member" input fields
+  const [isAddingMember, setIsAddingMember] = useState(false);
   const [newMember, setNewMember] = useState<Partial<FamilyMember>>({
     relation: "SON",
     livesWithFamily: true,
@@ -97,72 +115,43 @@ export default function RegisterForm() {
     monthlyIncome: "",
   });
 
-  // --- Handlers ---
-
+  // --- Strict Validation Handlers ---
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     >,
   ) => {
     const { name, value } = e.target;
+
+    // Block input if length exceeds limit
+    if (name === "aadharNumber" && value.length > 12) return;
+    if (name === "mobileNumber" && value.length > 10) return;
+
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const toggleProblem = (tag: string) => {
-    setFormData((prev) => {
-      const exists = prev.problems.includes(tag);
-      if (exists)
-        return { ...prev, problems: prev.problems.filter((t) => t !== tag) };
-      return { ...prev, problems: [...prev.problems, tag] };
-    });
-  };
-
-  // --- Logic: Add Family Member ---
-  const addMember = () => {
-    if (!newMember.name || !newMember.age) {
-      alert("Please enter Name and Age");
-      return;
-    }
-
-    // Call the helper function here
-    const memberId = generateUniqueId();
-
-    const member: FamilyMember = {
-      id: memberId,
-      name: newMember.name!,
-      relation: (newMember.relation as any) || "SON",
-      age: newMember.age!,
-      isEarning: newMember.isEarning || false,
-      occupation: newMember.occupation || "Unemployed",
-      monthlyIncome: newMember.monthlyIncome || "0",
-      livesWithFamily: newMember.livesWithFamily ?? true,
-      maritalStatus: (newMember.maritalStatus as any) || "SINGLE",
+  // --- Duplicate Check Effect ---
+  useEffect(() => {
+    const checkAadhar = async () => {
+      if (formData.aadharNumber.length === 12) {
+        if (isEditMode && formData.aadharNumber === initialData?.aadharNumber)
+          return;
+        const res = await checkAadharDuplicate(formData.aadharNumber);
+        if (res.exists)
+          setAadharStatus({
+            exists: true,
+            message: res.message || "This Aadhaar number is already registered.",
+            name: res.name,
+          });
+        else setAadharStatus(null);
+      } else {
+        setAadharStatus(null);
+      }
     };
+    checkAadhar();
+  }, [formData.aadharNumber, isEditMode, initialData]);
 
-    const updatedList = [...familyMembers, member];
-    updateStats(updatedList);
-    setFamilyMembers(updatedList);
-
-    // Reset inputs
-    setNewMember({
-      relation: "SON",
-      livesWithFamily: true,
-      isEarning: false,
-      maritalStatus: "SINGLE",
-      occupation: "",
-      monthlyIncome: "",
-    });
-    setIsAddingMember(false);
-  };
-
-  // --- Logic: Remove Family Member ---
-  const removeMember = (id: string) => {
-    const updatedList = familyMembers.filter((m) => m.id !== id);
-    updateStats(updatedList);
-    setFamilyMembers(updatedList);
-  };
-
-  // --- Logic: Auto-Calculate Stats ---
+  // --- Helper Functions ---
   const updateStats = (list: FamilyMember[]) => {
     const sons = list.filter((m) => m.relation === "SON").length;
     const daughters = list.filter((m) => m.relation === "DAUGHTER").length;
@@ -185,48 +174,79 @@ export default function RegisterForm() {
     }));
   };
 
-  const handleAddCustomProblem = (e: React.MouseEvent | React.KeyboardEvent) => {
-    e.preventDefault();
-    const trimmed = customProblem.trim();
-    
-    if (!trimmed) return; // Don't add empty
-    if (formData.problems.includes(trimmed)) {
-      setCustomProblem(""); // Already exists, just clear input
-      return;
-    }
+  const addMember = () => {
+    if (!newMember.name || !newMember.age)
+      return alert("Please enter Name and Age");
+    const member: FamilyMember = {
+      id: generateUniqueId(),
+      name: newMember.name!,
+      relation: (newMember.relation as any) || "SON",
+      age: newMember.age!,
+      isEarning: newMember.isEarning || false,
+      occupation: newMember.occupation || "Unemployed",
+      monthlyIncome: newMember.monthlyIncome || "0",
+      livesWithFamily: newMember.livesWithFamily ?? true,
+      maritalStatus: (newMember.maritalStatus as any) || "SINGLE",
+    };
+    const updatedList = [...familyMembers, member];
+    setFamilyMembers(updatedList);
+    updateStats(updatedList);
+    setIsAddingMember(false);
+    setNewMember({
+      relation: "SON",
+      livesWithFamily: true,
+      isEarning: false,
+      maritalStatus: "SINGLE",
+      occupation: "",
+      monthlyIncome: "",
+    });
+  };
 
-    setFormData(prev => ({
-      ...prev,
-      problems: [...prev.problems, trimmed]
-    }));
+  const removeMember = (id: string) => {
+    const updatedList = familyMembers.filter((m) => m.id !== id);
+    setFamilyMembers(updatedList);
+    updateStats(updatedList);
+  };
+
+  const toggleProblem = (tag: string) => {
+    setFormData((prev) => {
+      const exists = prev.problems.includes(tag);
+      return exists
+        ? { ...prev, problems: prev.problems.filter((t: string) => t !== tag) }
+        : { ...prev, problems: [...prev.problems, tag] };
+    });
+  };
+
+  const handleAddCustomProblem = () => {
+    const trimmed = customProblem.trim();
+    if (!trimmed || formData.problems.includes(trimmed)) return;
+    setFormData((prev) => ({ ...prev, problems: [...prev.problems, trimmed] }));
     setCustomProblem("");
   };
 
-  // NEW HANDLER: Remove specific problem (for custom tags)
-  const removeProblem = (tag: string) => {
-     setFormData(prev => ({
-       ...prev,
-       problems: prev.problems.filter(t => t !== tag)
-     }));
-  };
-
-  // --- Logic: Submit Form ---
+  // --- Submit Handler ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (
+      formData.aadharNumber.length !== 12 ||
+      formData.mobileNumber.length !== 10
+    )
+      return;
+
     setLoading(true);
-    setMessage(null);
-
-    // Combine standard data with the detailed list
-    const finalData = {
-      ...formData,
-      familyMembersDetail: familyMembers,
-    };
-
-    const result = await registerBeneficiary(finalData);
+    const finalData = { ...formData, familyMembersDetail: familyMembers };
+    const result =
+      isEditMode && initialData?._id
+        ? await updateBeneficiary(initialData._id, finalData)
+        : await registerBeneficiary(finalData);
 
     if (result.success) {
       setMessage({ type: "success", text: result.message });
-      setTimeout(() => router.push("/"), 2000);
+      setTimeout(
+        () =>
+          router.push(isEditMode ? `/beneficiaries/${initialData._id}` : "/"),
+        1500,
+      );
     } else {
       setMessage({ type: "error", text: result.message });
     }
@@ -234,79 +254,125 @@ export default function RegisterForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 pb-24">
-      {/* --- Section 1: Personal Details --- */}
-      <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
-        <h3 className="text-lg font-outfit font-bold text-gray-800 dark:text-gray-100 mb-4 border-b pb-2 border-gray-100 dark:border-gray-800">
-          Personal Details
-        </h3>
-
-        <div className="space-y-4">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-8 pb-32 max-w-3xl mx-auto font-outfit"
+    >
+      {/* 1. Identity Section */}
+      <section className="bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-2xl">
+            <Fingerprint className="w-6 h-6 text-green-600" />
+          </div>
           <div>
-            <label className="text-xs font-semibold text-gray-500 uppercase">
+            <h3 className="text-xl font-black text-gray-900 dark:text-white leading-none">
+              Identity Verification
+            </h3>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+              Personal Details
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div>
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">
               Full Name
             </label>
             <input
               required
               name="fullName"
+              value={formData.fullName}
               onChange={handleChange}
               type="text"
               placeholder="e.g. Fatima Shaikh"
-              className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border-none focus:ring-2 focus:ring-green-500 font-inter"
+              className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-2 border-transparent focus:border-green-500 focus:bg-white dark:focus:bg-gray-900 outline-none transition-all font-bold text-gray-900 dark:text-white"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Aadhaar Input */}
             <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase">
-                Aadhaar No.
-              </label>
+              <div className="flex justify-between items-center mb-1.5 px-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">
+                  Aadhaar (12 Digits)
+                </label>
+                <span
+                  className={`text-[10px] font-black ${formData.aadharNumber.length === 12 ? "text-green-600" : "text-red-500"}`}
+                >
+                  {formData.aadharNumber.length} / 12
+                </span>
+              </div>
               <input
                 required
                 name="aadharNumber"
+                value={formData.aadharNumber}
                 onChange={handleChange}
                 type="number"
-                placeholder="12 Digit No"
-                className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border-none focus:ring-2 focus:ring-green-500 font-inter"
+                placeholder="0000 0000 0000"
+                className={`w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-2 outline-none transition-all font-mono font-bold text-lg ${formData.aadharNumber.length === 12 && !aadharStatus ? "border-green-100 dark:border-green-900/30" : "border-transparent focus:border-green-500"}`}
               />
+              {aadharStatus?.exists && (
+                <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-2xl flex gap-2 animate-in fade-in zoom-in-95">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  <p className="text-[11px] text-red-700 dark:text-red-400 font-bold leading-tight">
+                    Duplicate: Registered as {aadharStatus.name}
+                  </p>
+                </div>
+              )}
             </div>
+
+            {/* Mobile Input */}
             <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase">
-                Mobile
-              </label>
-              <input
-                required
-                name="mobileNumber"
-                onChange={handleChange}
-                type="tel"
-                placeholder="9876..."
-                className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border-none focus:ring-2 focus:ring-green-500 font-inter"
-              />
+              <div className="flex justify-between items-center mb-1.5 px-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">
+                  Mobile (10 Digits)
+                </label>
+                <span
+                  className={`text-[10px] font-black ${formData.mobileNumber.length === 10 ? "text-green-600" : "text-red-500"}`}
+                >
+                  {formData.mobileNumber.length} / 10
+                </span>
+              </div>
+              <div className="relative">
+                <Smartphone className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+                <input
+                  required
+                  name="mobileNumber"
+                  value={formData.mobileNumber}
+                  onChange={handleChange}
+                  type="number"
+                  placeholder="98XXXXXXXX"
+                  className="w-full p-4 pl-12 rounded-2xl bg-gray-50 dark:bg-gray-800 border-2 border-transparent focus:border-green-500 outline-none transition-all font-mono font-bold text-lg"
+                />
+              </div>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">
                 Gender
               </label>
               <select
                 name="gender"
+                value={formData.gender}
                 onChange={handleChange}
-                className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border-none"
+                className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none outline-none font-bold"
               >
                 <option value="FEMALE">Female</option>
                 <option value="MALE">Male</option>
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase">
-                Husband Status
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">
+                Husband / Wife Status
               </label>
               <select
                 name="husbandStatus"
+                value={formData.husbandStatus}
                 onChange={handleChange}
-                className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border-none"
+                className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none outline-none font-bold"
               >
                 <option value="ALIVE">Alive</option>
                 <option value="WIDOW">Widow</option>
@@ -316,43 +382,50 @@ export default function RegisterForm() {
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* --- Section 2: Address --- */}
-      <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
-        <h3 className="text-lg font-outfit font-bold text-gray-800 dark:text-gray-100 mb-4 border-b pb-2 border-gray-100 dark:border-gray-800">
-          Address
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-gray-500 uppercase">
-              Current Address
-            </label>
-            <textarea
-              required
-              name="currentAddress"
-              onChange={handleChange}
-              rows={2}
-              placeholder="Room No, Building Name..."
-              className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border-none focus:ring-2 focus:ring-green-500 font-inter"
-            />
+      {/* 2. Residence Section */}
+      <section className="bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl">
+            <MapPin className="w-6 h-6 text-blue-600" />
           </div>
+          <div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-white leading-none">
+              Residence
+            </h3>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+              Address Verification
+            </p>
+          </div>
+        </div>
+        <div className="space-y-6">
+          <textarea
+            required
+            name="currentAddress"
+            value={formData.currentAddress}
+            onChange={handleChange}
+            rows={2}
+            placeholder="Room No, Building Name, Locality..."
+            className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none focus:ring-2 focus:ring-blue-500 text-sm font-bold resize-none"
+          />
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase">
-                Aadhaar Pincode
+            <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-2xl">
+              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 block">
+                Aadhar Pincode
               </label>
               <input
                 required
                 name="aadharPincode"
+                value={formData.aadharPincode}
                 onChange={handleChange}
                 type="number"
-                placeholder="xxxxxx"
-                className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border-none focus:ring-2 focus:ring-green-500 font-inter"
+                placeholder="4000XX"
+                className="w-full bg-transparent border-none outline-none font-mono font-bold"
               />
             </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase text-green-600">
+            <div className="bg-blue-50 dark:bg-blue-900/10 p-3 rounded-2xl border border-blue-100 dark:border-blue-900/30">
+              <label className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1 block">
                 Current Pincode
               </label>
               <input
@@ -361,68 +434,57 @@ export default function RegisterForm() {
                 value={formData.currentPincode}
                 onChange={handleChange}
                 type="number"
-                className="w-full mt-1 p-3 rounded-xl bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 focus:ring-2 focus:ring-green-500 font-inter font-bold"
+                className="w-full bg-transparent border-none outline-none font-mono font-black text-blue-700 dark:text-blue-300 text-lg"
               />
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* --- Section 3: Family Members (Dynamic List) --- */}
-      <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
-        <div className="flex justify-between items-center mb-4 border-b pb-2 border-gray-100 dark:border-gray-800">
-          <h3 className="text-lg font-outfit font-bold text-gray-800 dark:text-gray-100">
-            Family Members
-          </h3>
-          <span className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-gray-500 font-medium">
-            Total: {familyMembers.length}
-          </span>
+      {/* 3. Family Members */}
+      <section className="bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-2xl">
+              <Users className="w-6 h-6 text-purple-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-gray-900 dark:text-white leading-none">
+                Family
+              </h3>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                Members: {familyMembers.length}
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* List of Added Members */}
         <div className="space-y-3 mb-6">
-          {familyMembers.length === 0 && (
-            <p className="text-center text-sm text-gray-400 italic py-4">
-              No members added yet.
-            </p>
-          )}
-
           {familyMembers.map((member) => (
             <div
               key={member.id}
-              className="flex justify-between items-start bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700"
+              className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700"
             >
               <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold font-outfit text-gray-800 dark:text-gray-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-bold text-gray-900 dark:text-white">
                     {member.name}
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold uppercase">
+                  <span className="text-[9px] px-2 py-0.5 rounded-lg bg-purple-100 text-purple-700 font-bold uppercase">
                     {member.relation}
                   </span>
-                  {!member.livesWithFamily && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold">
-                      SEPARATE
-                    </span>
-                  )}
                 </div>
-                <div className="text-xs text-gray-500 mt-1 flex gap-2 items-center">
-                  <span>Age: {member.age}</span>
-                  <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                  <span>{member.maritalStatus}</span>
+                <div className="text-xs text-gray-500 font-medium">
+                  {member.age} Yrs •{" "}
+                  {member.isEarning
+                    ? `Earns ₹${member.monthlyIncome}`
+                    : "No Income"}
                 </div>
-                {member.isEarning ? (
-                  <div className="text-xs text-green-600 font-semibold mt-1">
-                    Earns ₹{member.monthlyIncome} ({member.occupation})
-                  </div>
-                ) : (
-                  <div className="text-xs text-gray-400 mt-1">Not Earning</div>
-                )}
               </div>
               <button
-                onClick={() => removeMember(member.id)}
                 type="button"
-                className="text-red-400 hover:text-red-600 p-2 bg-white dark:bg-gray-700 rounded-lg shadow-sm"
+                onClick={() => removeMember(member.id)}
+                className="p-2 text-red-400 hover:bg-white dark:hover:bg-gray-700 rounded-xl transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -430,23 +492,19 @@ export default function RegisterForm() {
           ))}
         </div>
 
-        {/* Add New Member Button or Form */}
         {!isAddingMember ? (
           <button
             type="button"
             onClick={() => setIsAddingMember(true)}
-            className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl text-gray-500 font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-all flex items-center justify-center gap-2"
+            className="w-full py-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl text-gray-400 font-bold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
           >
-            <UserPlus className="w-5 h-5" />
-            Add Son / Daughter / Parent
+            <UserPlus className="w-5 h-5" /> Add Member
           </button>
         ) : (
-          <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-green-200 dark:border-green-900 shadow-inner">
-            <h4 className="text-sm font-bold text-green-700 mb-3 uppercase tracking-wide">
+          <div className="bg-gray-50 dark:bg-gray-800/50 p-5 rounded-3xl border border-purple-100 dark:border-purple-900/30">
+            <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest mb-4">
               New Member Details
             </h4>
-
-            {/* Row 1 */}
             <div className="grid grid-cols-2 gap-3 mb-3">
               <input
                 type="text"
@@ -455,8 +513,19 @@ export default function RegisterForm() {
                 onChange={(e) =>
                   setNewMember({ ...newMember, name: e.target.value })
                 }
-                className="p-2 rounded-lg text-sm border font-inter bg-white dark:bg-gray-900"
+                className="p-3 rounded-xl text-sm font-bold bg-white dark:bg-gray-900 outline-none"
               />
+              <input
+                type="number"
+                placeholder="Age"
+                value={newMember.age || ""}
+                onChange={(e) =>
+                  setNewMember({ ...newMember, age: e.target.value })
+                }
+                className="p-3 rounded-xl text-sm font-bold bg-white dark:bg-gray-900 outline-none"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3 mb-3">
               <select
                 value={newMember.relation}
                 onChange={(e) =>
@@ -465,7 +534,7 @@ export default function RegisterForm() {
                     relation: e.target.value as any,
                   })
                 }
-                className="p-2 rounded-lg text-sm border bg-white dark:bg-gray-900"
+                className="p-3 rounded-xl text-sm font-bold bg-white dark:bg-gray-900 outline-none"
               >
                 <option value="SON">Son</option>
                 <option value="DAUGHTER">Daughter</option>
@@ -473,19 +542,6 @@ export default function RegisterForm() {
                 <option value="MOTHER">Mother</option>
                 <option value="FATHER">Father</option>
               </select>
-            </div>
-
-            {/* Row 2 */}
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <input
-                type="number"
-                placeholder="Age"
-                value={newMember.age || ""}
-                onChange={(e) =>
-                  setNewMember({ ...newMember, age: e.target.value })
-                }
-                className="p-2 rounded-lg text-sm border font-inter bg-white dark:bg-gray-900"
-              />
               <select
                 value={newMember.maritalStatus}
                 onChange={(e) =>
@@ -494,286 +550,223 @@ export default function RegisterForm() {
                     maritalStatus: e.target.value as any,
                   })
                 }
-                className="p-2 rounded-lg text-sm border bg-white dark:bg-gray-900"
+                className="p-3 rounded-xl text-sm font-bold bg-white dark:bg-gray-900 outline-none"
               >
                 <option value="SINGLE">Single</option>
                 <option value="MARRIED">Married</option>
                 <option value="DIVORCED">Divorced</option>
               </select>
             </div>
-
-            {/* Row 3: Income */}
-            <div className="mb-3 bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
-              <label className="flex items-center gap-2 mb-2 cursor-pointer select-none">
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <input
+                type="checkbox"
+                checked={newMember.isEarning}
+                onChange={(e) =>
+                  setNewMember({ ...newMember, isEarning: e.target.checked })
+                }
+                className="w-4 h-4 accent-purple-600"
+              />
+              <span className="text-sm font-bold text-gray-500">
+                Is Earning?
+              </span>
+            </div>
+            {newMember.isEarning && (
+              <div className="grid grid-cols-2 gap-3 mb-4 animate-in fade-in">
                 <input
-                  type="checkbox"
-                  checked={newMember.isEarning}
+                  type="text"
+                  placeholder="Job Title"
+                  value={newMember.occupation || ""}
+                  onChange={(e) =>
+                    setNewMember({ ...newMember, occupation: e.target.value })
+                  }
+                  className="p-3 rounded-xl text-xs bg-white dark:bg-gray-900 font-bold"
+                />
+                <input
+                  type="number"
+                  placeholder="Income"
+                  value={newMember.monthlyIncome || ""}
                   onChange={(e) =>
                     setNewMember({
                       ...newMember,
-                      isEarning: e.target.checked,
+                      monthlyIncome: e.target.value,
                     })
                   }
-                  className="w-4 h-4 accent-green-600 rounded"
+                  className="p-3 rounded-xl text-xs bg-white dark:bg-gray-900 font-bold"
                 />
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Is this person earning?
-                </span>
-              </label>
-
-              {newMember.isEarning && (
-                <div className="grid grid-cols-2 gap-3 mt-2 animate-in fade-in slide-in-from-top-1">
-                  <input
-                    type="text"
-                    placeholder="Job (e.g. Driver)"
-                    value={newMember.occupation || ""}
-                    onChange={(e) =>
-                      setNewMember({
-                        ...newMember,
-                        occupation: e.target.value,
-                      })
-                    }
-                    className="p-2 rounded-lg text-xs border bg-gray-50 dark:bg-gray-800"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Income (₹)"
-                    value={newMember.monthlyIncome || ""}
-                    onChange={(e) =>
-                      setNewMember({
-                        ...newMember,
-                        monthlyIncome: e.target.value,
-                      })
-                    }
-                    className="p-2 rounded-lg text-xs border bg-gray-50 dark:bg-gray-800"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Row 4: Lives with family? */}
-            <div className="flex items-center gap-3 mb-4">
-              <label className="text-xs font-semibold text-gray-500 uppercase">
-                Lives here?
-              </label>
-              <div className="flex bg-white dark:bg-gray-900 rounded-lg p-1 border">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setNewMember({ ...newMember, livesWithFamily: true })
-                  }
-                  className={`px-3 py-1 text-xs rounded transition-all ${newMember.livesWithFamily ? "bg-green-100 text-green-700 font-bold" : "text-gray-400"}`}
-                >
-                  Yes
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setNewMember({ ...newMember, livesWithFamily: false })
-                  }
-                  className={`px-3 py-1 text-xs rounded transition-all ${!newMember.livesWithFamily ? "bg-red-100 text-red-700 font-bold" : "text-gray-400"}`}
-                >
-                  No
-                </button>
               </div>
-            </div>
-
-            {/* Sub-form Actions */}
+            )}
             <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => setIsAddingMember(false)}
-                className="flex-1 py-2 text-sm text-gray-500 bg-white dark:bg-gray-900 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="flex-1 py-3 text-sm font-bold text-gray-500 bg-white dark:bg-gray-900 rounded-xl"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={addMember}
-                className="flex-1 py-2 text-sm text-white bg-green-600 rounded-lg font-bold shadow-md hover:bg-green-700"
+                className="flex-1 py-3 text-sm font-bold text-white bg-purple-600 rounded-xl shadow-lg shadow-purple-200 dark:shadow-none"
               >
-                Save Member
+                Save
               </button>
             </div>
           </div>
         )}
-      </div>
+      </section>
 
-      {/* --- Section 4: Housing & Problems --- */}
-      <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
-        <h3 className="text-lg font-outfit font-bold text-gray-800 dark:text-gray-100 mb-4 border-b pb-2 border-gray-100 dark:border-gray-800">
-          Housing & Problems
-        </h3>
-
-        {/* Housing Toggle */}
-        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4">
+      {/* 4. Housing & Problems */}
+      <section className="bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
+        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl mb-6">
           <button
             type="button"
             onClick={() =>
               setFormData({ ...formData, housingType: "OWN", rentAmount: 0 })
             }
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${formData.housingType === "OWN" ? "bg-white shadow dark:bg-gray-700 text-gray-800 dark:text-white" : "text-gray-500"}`}
+            className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${formData.housingType === "OWN" ? "bg-white shadow dark:bg-gray-700 text-gray-900 dark:text-white" : "text-gray-400"}`}
           >
             Own House
           </button>
           <button
             type="button"
             onClick={() => setFormData({ ...formData, housingType: "RENT" })}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${formData.housingType === "RENT" ? "bg-white shadow dark:bg-gray-700 text-red-500 font-bold" : "text-gray-500"}`}
+            className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${formData.housingType === "RENT" ? "bg-white shadow dark:bg-gray-700 text-red-500" : "text-gray-400"}`}
           >
             Rented
           </button>
         </div>
 
         {formData.housingType === "RENT" && (
-          <div className="mb-6 animate-in fade-in slide-in-from-top-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase">
-              Monthly Rent
+          <div className="mb-6 animate-in fade-in">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1 block">
+              Monthly Rent Amount
             </label>
-            <div className="relative mt-1">
-              <span className="absolute left-4 top-3 text-gray-400">₹</span>
-              <input
-                type="number"
-                name="rentAmount"
-                onChange={handleChange}
-                className="w-full p-3 pl-8 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900 focus:ring-2 focus:ring-red-500"
-                placeholder="Amount"
-              />
-            </div>
+            <input
+              type="number"
+              name="rentAmount"
+              value={formData.rentAmount}
+              onChange={handleChange}
+              className="w-full p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900 text-red-600 font-black text-lg"
+            />
           </div>
         )}
 
-        {/* Problem Tags Section */}
-        <div className="space-y-3">
-          <label className="text-xs font-semibold text-gray-500 uppercase">
-            Select Major Problems
-          </label>
-          
-          {/* 1. Predefined Tags (Red/Gray) */}
-          <div className="flex flex-wrap gap-2">
-            {PROBLEM_TAGS.map((tag) => (
-              <button
+        <div className="flex flex-wrap gap-2 mb-4">
+          {PROBLEM_TAGS.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => toggleProblem(tag)}
+              className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${formData.problems.includes(tag) ? "bg-red-500 text-white border-red-500" : "border-gray-200 dark:border-gray-700 text-gray-500"}`}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={customProblem}
+            onChange={(e) => setCustomProblem(e.target.value)}
+            placeholder="Other Problem..."
+            className="flex-1 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 text-sm font-bold outline-none"
+          />
+          <button
+            type="button"
+            onClick={handleAddCustomProblem}
+            className="bg-gray-900 dark:bg-gray-700 text-white px-5 rounded-xl text-sm font-bold"
+          >
+            Add
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-3">
+          {formData.problems
+            .filter((p: any) => !PROBLEM_TAGS.includes(p))
+            .map((tag: any) => (
+              <span
                 key={tag}
-                type="button"
-                onClick={() => toggleProblem(tag)}
-                className={`px-3 py-2 rounded-full text-sm border transition-all ${
-                  formData.problems.includes(tag)
-                    ? "bg-red-500 text-white border-red-500 font-medium"
-                    : "bg-transparent border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"
-                }`}
+                className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-xs font-bold border border-blue-100 flex items-center gap-2"
               >
-                {tag}
-              </button>
-            ))}
-          </div>
-
-          {/* 2. Custom Problem Input */}
-          <div className="mt-4 pt-4 border-t border-dashed border-gray-200 dark:border-gray-800">
-             <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block">
-                Other Problem? (Type & Add)
-             </label>
-             <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={customProblem}
-                  onChange={(e) => setCustomProblem(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddCustomProblem(e)}
-                  placeholder="e.g. Flood Victim"
-                  className="flex-1 p-3 rounded-xl text-sm border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-green-500 outline-none"
-                />
-                <button 
+                {tag}{" "}
+                <button
                   type="button"
-                  onClick={handleAddCustomProblem}
-                  className="bg-gray-900 dark:bg-gray-700 text-white px-5 rounded-xl text-sm font-bold active:scale-95 transition-transform"
+                  onClick={() => toggleProblem(tag)}
+                  className="text-red-500 font-black"
                 >
-                  Add
+                  ×
                 </button>
-             </div>
-          </div>
+              </span>
+            ))}
+        </div>
+      </section>
 
-          {/* 3. Display Custom Added Tags (Blue) */}
-          {/* We filter out tags that are already in the PROBLEM_TAGS list so we only show the new custom ones here */}
-          {formData.problems.filter(p => !PROBLEM_TAGS.includes(p)).length > 0 && (
-             <div className="flex flex-wrap gap-2 mt-2 animate-in fade-in">
-                {formData.problems.filter(p => !PROBLEM_TAGS.includes(p)).map(customTag => (
-                   <span key={customTag} className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium border border-blue-200 dark:border-blue-800">
-                      {customTag}
-                      <button 
-                        type="button" 
-                        onClick={() => removeProblem(customTag)}
-                        className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-red-500 hover:text-white transition-colors text-xs"
-                      >
-                        ✕
-                      </button>
-                   </span>
-                ))}
-             </div>
+      {/* 5. Reference */}
+      <section className="bg-gradient-to-br from-gray-900 to-gray-800 dark:from-gray-800 dark:to-black p-6 rounded-[2.5rem] text-white shadow-xl">
+        <div className="flex items-center gap-3 mb-4">
+          <ShieldCheck className="w-5 h-5 text-green-400" />
+          <h3 className="font-bold">Trust Verification</h3>
+        </div>
+        <input
+          name="referencedBy"
+          value={formData.referencedBy}
+          onChange={handleChange}
+          placeholder="Referenced By (Name)"
+          className="w-full p-4 bg-white/10 rounded-2xl border border-white/10 focus:bg-white/20 outline-none font-bold placeholder:text-gray-500 text-white transition-all"
+        />
+        <textarea
+          name="comments"
+          value={formData.comments}
+          onChange={handleChange}
+          rows={2}
+          placeholder="Additional Admin Notes..."
+          className="w-full mt-4 p-4 bg-white/10 rounded-2xl border border-white/10 focus:bg-white/20 outline-none font-medium text-sm placeholder:text-gray-500 text-white transition-all resize-none"
+        />
+      </section>
+
+      {/* --- Floating Action Bar --- */}
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 dark:bg-[#020617]/80 backdrop-blur-xl border-t border-gray-200 dark:border-gray-800 z-50">
+        <div className="max-w-3xl mx-auto">
+          {message && (
+            <div
+              className={`mb-4 p-4 rounded-2xl flex items-center gap-3 animate-in slide-in-from-bottom-2 ${message.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
+            >
+              {message.type === "success" ? (
+                <CheckCircle className="w-5 h-5" />
+              ) : (
+                <AlertTriangle className="w-5 h-5" />
+              )}
+              <span className="text-sm font-bold">{message.text}</span>
+            </div>
           )}
+          <button
+            disabled={
+              loading ||
+              formData.aadharNumber.length !== 12 ||
+              formData.mobileNumber.length !== 10 ||
+              !!aadharStatus
+            }
+            className={`w-full py-5 rounded-[2rem] font-black shadow-2xl transition-all active:scale-[0.98] flex justify-center items-center gap-3 ${
+              loading ||
+              formData.aadharNumber.length !== 12 ||
+              formData.mobileNumber.length !== 10 ||
+              !!aadharStatus
+                ? "bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
+                : "bg-green-600 hover:bg-green-700 text-white shadow-green-200 dark:shadow-none"
+            }`}
+          >
+            {loading ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <>
+                <span className="tracking-widest uppercase text-xs">
+                  {isEditMode ? "UPDATE RECORDS" : "AUTHORIZE REGISTRATION"}
+                </span>
+                <ChevronRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
         </div>
       </div>
-
-      {/* --- Section 5: Reference & Notes --- */}
-      <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
-        <h3 className="text-lg font-outfit font-bold text-gray-800 dark:text-gray-100 mb-4 border-b pb-2 border-gray-100 dark:border-gray-800">
-          Reference & Verification
-        </h3>
-
-        <div className="space-y-5">
-          {/* Reference Input */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
-             <label className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase flex items-center gap-2 mb-1">
-               <UserPlus className="w-4 h-4" />
-               Referred By
-             </label>
-             <input 
-               type="text" 
-               name="referencedBy"
-               onChange={handleChange}
-               placeholder="e.g. Shoaib Khan / Trust Member Name"
-               className="w-full mt-1 p-3 rounded-lg bg-white dark:bg-gray-800 border-none focus:ring-2 focus:ring-blue-500 font-inter shadow-sm"
-             />
-             <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-2 leading-tight">
-               * If a trusted member refers this family, strict verification might be waived.
-             </p>
-          </div>
-
-          {/* Comments Area */}
-          <div>
-             <label className="text-xs font-semibold text-gray-500 uppercase ml-1">
-               Additional Notes
-             </label>
-             <textarea
-               name="comments"
-               onChange={handleChange}
-               rows={3}
-               placeholder="Write any extra details here (e.g. 'Needs urgent medical help', 'Documents pending')..."
-               className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border-none focus:ring-2 focus:ring-green-500 font-inter text-sm resize-none"
-             />
-          </div>
-        </div>
-      </div>
-
-      {/* --- Error / Success Messages --- */}
-      {message && (
-        <div
-          className={`p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-bottom-5 ${message.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
-        >
-          {message.type === "success" ? (
-            <CheckCircle className="w-5 h-5 shrink-0" />
-          ) : (
-            <AlertTriangle className="w-5 h-5 shrink-0" />
-          )}
-          <span className="text-sm font-medium">{message.text}</span>
-        </div>
-      )}
-
-      {/* --- Submit Button --- */}
-      <button
-        disabled={loading}
-        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-outfit font-bold text-lg py-4 rounded-2xl shadow-xl shadow-green-200 dark:shadow-none flex justify-center items-center gap-2 transition-all active:scale-[0.98]"
-      >
-        {loading ? <Loader2 className="animate-spin" /> : "Register Family"}
-      </button>
     </form>
   );
 }
