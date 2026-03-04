@@ -78,3 +78,23 @@ export async function approveUser(userId: string) {
     return { success: false, message: "Approval failed: " + error.message };
   }
 }
+export async function getAllUsers() {
+  await connectDB();
+  const users = await User.find({ role: { $ne: "SUPER_ADMIN" } }) // Exclude Super Admin from list if desired
+    .select("name username isApproved _id")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return JSON.parse(JSON.stringify(users));
+}
+
+export async function deleteUser(userId: string) {
+  try {
+    await connectDB();
+    await User.findByIdAndDelete(userId);
+    revalidatePath("/admin/users");
+    return { success: true, message: "User removed successfully" };
+  } catch (error) {
+    return { success: false, message: "Failed to remove user" };
+  }
+}

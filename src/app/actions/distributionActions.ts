@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/mongoose";
 import Beneficiary from "@/models/Beneficiary";
 import { revalidatePath } from "next/cache";
 import { logAction } from "@/lib/logger"; // Imported logger
+import Inventory from "@/models/Inventory";
 
 // Helper to get the current year for annual tracking
 const currentYear = new Date().getFullYear();
@@ -124,6 +125,11 @@ export async function markDistributed(id: string) {
       "DISTRIBUTION",
       beneficiary.fullName,
       `Ration kit handed over for Ramzan ${currentYear}`
+    );
+
+    await Inventory.findOneAndUpdate(
+        { type: "RATION_KIT" },
+        { $inc: { count: -1 } }
     );
 
     revalidatePath("/");

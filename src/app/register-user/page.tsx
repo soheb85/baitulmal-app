@@ -2,45 +2,53 @@
 
 import { useState } from "react";
 import { registerUser } from "@/app/actions/userActions";
-import { useRouter } from "next/navigation";
 import { UserPlus, Lock, User, Loader2, ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import { useBackNavigation } from "@/hooks/useBackNavigation"; // Import Hook
+import NavigationLoader from "@/components/ui/NavigationLoader"; // Import Loader
 
 export default function RegisterUserPage() {
   const [formData, setFormData] = useState({ name: "", username: "", password: "" });
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  
+  // Initialize Navigation Hook
+  const { isNavigating, handleBack } = useBackNavigation("/");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    
     const res = await registerUser(formData);
+    
     if (res.success) {
       alert(res.message);
-      router.push("/login");
+      // Use handleBack to show loader while redirecting to login
+      handleBack("/login");
     } else {
       alert(res.message);
+      setLoading(false);
     }
-    setLoading(false);
   };
+
+  // Show Full Screen Loader if navigating away
+  if (isNavigating) return <NavigationLoader message="Redirecting..." />;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col justify-center px-6 font-outfit relative">
       
-      {/* --- Back Button --- */}
-      <Link 
-        href="/" 
+      {/* --- Back Button (Using handleBack) --- */}
+      <button 
+        onClick={() => handleBack("/")}
         className="absolute top-8 left-6 p-3 bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 active:scale-90 transition-transform"
       >
         <ArrowLeft className="w-6 h-6 text-gray-600 dark:text-gray-300" />
-      </Link>
+      </button>
 
-      <div className="max-w-md w-full mx-auto space-y-8">
+      <div className="max-w-md w-full mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="text-center">
           <div className="bg-green-100 dark:bg-green-900/30 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4">
             <UserPlus className="w-8 h-8 text-green-600" />
           </div>
-          <h2 className="text-3xl font-black text-gray-900 dark:text-white leading-tight">Register Member or Trusty</h2>
+          <h2 className="text-3xl font-black text-gray-900 dark:text-white leading-tight">Register Member</h2>
           <p className="text-gray-500 mt-2">Create an account to manage distributions</p>
         </div>
 
@@ -85,7 +93,13 @@ export default function RegisterUserPage() {
         </form>
 
         <p className="text-center text-sm text-gray-500">
-          Already have an account? <Link href="/login" className="text-green-600 font-bold">Login</Link>
+          Already have an account? 
+          <button 
+            onClick={() => handleBack("/login")} 
+            className="text-green-600 font-bold ml-1 hover:underline"
+          >
+            Login
+          </button>
         </p>
       </div>
     </div>

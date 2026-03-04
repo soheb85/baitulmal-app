@@ -2,10 +2,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation"; 
 import { registerBeneficiary } from "@/app/actions/registerBeneficiary";
 import { updateBeneficiary } from "@/app/actions/updateBeneficiary";
 import { checkAadharDuplicate } from "@/app/actions/checkAadhar";
+import { useBackNavigation } from "@/hooks/useBackNavigation"; 
+import NavigationLoader from "@/components/ui/NavigationLoader"; 
 import {
   Loader2,
   CheckCircle,
@@ -18,7 +20,10 @@ import {
   ShieldCheck,
   ChevronRight,
   Users,
-  MapPin,
+  // MapPin, // removed unused import
+  X, 
+  GraduationCap, // New Icon for Education
+  Briefcase // New Icon for Job
 } from "lucide-react";
 
 // --- Types ---
@@ -27,11 +32,19 @@ type FamilyMember = {
   name: string;
   relation: "SON" | "DAUGHTER" | "HUSBAND" | "WIFE" | "FATHER" | "MOTHER";
   age: string;
+  maritalStatus: "SINGLE" | "MARRIED" | "DIVORCED";
+  livesWithFamily: boolean;
+  
+  // Earning
   isEarning: boolean;
   occupation: string;
   monthlyIncome: string;
-  livesWithFamily: boolean;
-  maritalStatus: "SINGLE" | "MARRIED" | "DIVORCED";
+
+  // Education (New)
+  isStudying: boolean;
+  schoolName: string;
+  classStandard: string;
+  memberNotes: string;
 };
 
 const PROBLEM_TAGS = [
@@ -60,7 +73,8 @@ export default function RegisterForm({
   initialData,
   isEditMode = false,
 }: RegisterFormProps) {
-  const router = useRouter();
+  const { isNavigating, handleBack } = useBackNavigation("/");
+
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
@@ -80,14 +94,11 @@ export default function RegisterForm({
     mobileNumber: initialData?.mobileNumber || "",
     gender: initialData?.gender || "FEMALE",
     husbandStatus: initialData?.husbandStatus || "ALIVE",
-
-    // Stats (Auto-calculated)
     sons: initialData?.sons || 0,
     daughters: initialData?.daughters || 0,
     otherDependents: initialData?.otherDependents || 0,
     earningMembersCount: initialData?.earningMembersCount || 0,
     totalFamilyIncome: initialData?.totalFamilyIncome || 0,
-
     housingType: initialData?.housingType || "OWN",
     rentAmount: initialData?.rentAmount || 0,
     currentAddress: initialData?.currentAddress || "",
@@ -102,10 +113,16 @@ export default function RegisterForm({
     initialData?.familyMembersDetail?.map((m: any) => ({
       ...m,
       id: m.id || m._id || generateUniqueId(),
+      // Ensure defaults for new fields if editing old record
+      isStudying: m.isStudying || false,
+      schoolName: m.schoolName || "",
+      classStandard: m.classStandard || ""
     })) || [],
   );
 
   const [isAddingMember, setIsAddingMember] = useState(false);
+  
+  // Updated New Member State
   const [newMember, setNewMember] = useState<Partial<FamilyMember>>({
     relation: "SON",
     livesWithFamily: true,
@@ -113,24 +130,24 @@ export default function RegisterForm({
     maritalStatus: "SINGLE",
     occupation: "",
     monthlyIncome: "",
+    isStudying: false,
+    schoolName: "",
+    classStandard: "",
+    memberNotes: ""
   });
 
-  // --- Strict Validation Handlers ---
+  // --- Handlers ---
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     >,
   ) => {
     const { name, value } = e.target;
-
-    // Block input if length exceeds limit
     if (name === "aadharNumber" && value.length > 12) return;
     if (name === "mobileNumber" && value.length > 10) return;
-
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // --- Duplicate Check Effect ---
   useEffect(() => {
     const checkAadhar = async () => {
       if (formData.aadharNumber.length === 12) {
@@ -140,7 +157,7 @@ export default function RegisterForm({
         if (res.exists)
           setAadharStatus({
             exists: true,
-            message: res.message || "This Aadhaar number is already registered.",
+            message: res.message || "Aadhar number already registered",
             name: res.name,
           });
         else setAadharStatus(null);
@@ -163,7 +180,6 @@ export default function RegisterForm({
       (sum, m) => sum + Number(m.monthlyIncome || 0),
       0,
     );
-
     setFormData((prev) => ({
       ...prev,
       sons,
@@ -177,21 +193,29 @@ export default function RegisterForm({
   const addMember = () => {
     if (!newMember.name || !newMember.age)
       return alert("Please enter Name and Age");
+    
     const member: FamilyMember = {
       id: generateUniqueId(),
       name: newMember.name!,
       relation: (newMember.relation as any) || "SON",
       age: newMember.age!,
       isEarning: newMember.isEarning || false,
-      occupation: newMember.occupation || "Unemployed",
+      occupation: newMember.occupation || "None",
       monthlyIncome: newMember.monthlyIncome || "0",
       livesWithFamily: newMember.livesWithFamily ?? true,
       maritalStatus: (newMember.maritalStatus as any) || "SINGLE",
+      isStudying: newMember.isStudying || false,
+      schoolName: newMember.schoolName || "",
+      classStandard: newMember.classStandard || "",
+      memberNotes: newMember.memberNotes || "",
     };
+
     const updatedList = [...familyMembers, member];
     setFamilyMembers(updatedList);
     updateStats(updatedList);
     setIsAddingMember(false);
+    
+    // Reset Form
     setNewMember({
       relation: "SON",
       livesWithFamily: true,
@@ -199,6 +223,9 @@ export default function RegisterForm({
       maritalStatus: "SINGLE",
       occupation: "",
       monthlyIncome: "",
+      isStudying: false,
+      schoolName: "",
+      classStandard: ""
     });
   };
 
@@ -242,16 +269,17 @@ export default function RegisterForm({
 
     if (result.success) {
       setMessage({ type: "success", text: result.message });
-      setTimeout(
-        () =>
-          router.push(isEditMode ? `/beneficiaries/${initialData._id}` : "/"),
-        1500,
-      );
+      setTimeout(() => {
+        handleBack(isEditMode ? `/beneficiaries/${initialData._id}` : "/");
+      }, 1000);
     } else {
       setMessage({ type: "error", text: result.message });
+      setLoading(false);
     }
-    setLoading(false);
   };
+
+  if (isNavigating)
+    return <NavigationLoader message="Processing & Redirecting..." />;
 
   return (
     <form
@@ -291,7 +319,6 @@ export default function RegisterForm({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Aadhaar Input */}
             <div>
               <div className="flex justify-between items-center mb-1.5 px-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">
@@ -322,7 +349,6 @@ export default function RegisterForm({
               )}
             </div>
 
-            {/* Mobile Input */}
             <div>
               <div className="flex justify-between items-center mb-1.5 px-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">
@@ -366,7 +392,7 @@ export default function RegisterForm({
             </div>
             <div>
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">
-                Husband / Wife Status
+                Status
               </label>
               <select
                 name="husbandStatus"
@@ -378,6 +404,7 @@ export default function RegisterForm({
                 <option value="WIDOW">Widow</option>
                 <option value="DISABLED">Disabled</option>
                 <option value="ABANDONED">Abandoned</option>
+                <option value="NOT_MARRIED">Not Married</option>
               </select>
             </div>
           </div>
@@ -388,14 +415,14 @@ export default function RegisterForm({
       <section className="bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl">
-            <MapPin className="w-6 h-6 text-blue-600" />
+            <HomeIcon className="w-6 h-6 text-blue-600" />
           </div>
           <div>
             <h3 className="text-xl font-black text-gray-900 dark:text-white leading-none">
               Residence
             </h3>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-              Address Verification
+              Address Details
             </p>
           </div>
         </div>
@@ -406,7 +433,7 @@ export default function RegisterForm({
             value={formData.currentAddress}
             onChange={handleChange}
             rows={2}
-            placeholder="Room No, Building Name, Locality..."
+            placeholder="Building, Room No, Locality..."
             className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none focus:ring-2 focus:ring-blue-500 text-sm font-bold resize-none"
           />
           <div className="grid grid-cols-2 gap-4">
@@ -420,7 +447,7 @@ export default function RegisterForm({
                 value={formData.aadharPincode}
                 onChange={handleChange}
                 type="number"
-                placeholder="4000XX"
+                placeholder="4XXXXX"
                 className="w-full bg-transparent border-none outline-none font-mono font-bold"
               />
             </div>
@@ -441,7 +468,7 @@ export default function RegisterForm({
         </div>
       </section>
 
-      {/* 3. Family Members */}
+      {/* 3. Family Members (Updated Logic) */}
       <section className="bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
@@ -474,11 +501,16 @@ export default function RegisterForm({
                     {member.relation}
                   </span>
                 </div>
-                <div className="text-xs text-gray-500 font-medium">
-                  {member.age} Yrs •{" "}
-                  {member.isEarning
-                    ? `Earns ₹${member.monthlyIncome}`
-                    : "No Income"}
+                <div className="text-xs text-gray-500 font-medium flex gap-2">
+                  <span>{member.age} Yrs</span>
+                  <span>•</span>
+                  {member.isEarning ? (
+                    <span className="text-green-600 font-bold">Earns ₹{member.monthlyIncome}</span>
+                  ) : member.isStudying ? (
+                    <span className="text-blue-600 font-bold">{member.classStandard} @ {member.schoolName}</span>
+                  ) : (
+                    <span>Not Earning</span>
+                  )}
                 </div>
               </div>
               <button
@@ -505,6 +537,8 @@ export default function RegisterForm({
             <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest mb-4">
               New Member Details
             </h4>
+            
+            {/* Name & Age */}
             <div className="grid grid-cols-2 gap-3 mb-3">
               <input
                 type="text"
@@ -525,6 +559,8 @@ export default function RegisterForm({
                 className="p-3 rounded-xl text-sm font-bold bg-white dark:bg-gray-900 outline-none"
               />
             </div>
+
+            {/* Relations */}
             <div className="grid grid-cols-2 gap-3 mb-3">
               <select
                 value={newMember.relation}
@@ -557,44 +593,104 @@ export default function RegisterForm({
                 <option value="DIVORCED">Divorced</option>
               </select>
             </div>
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <input
-                type="checkbox"
-                checked={newMember.isEarning}
-                onChange={(e) =>
-                  setNewMember({ ...newMember, isEarning: e.target.checked })
-                }
-                className="w-4 h-4 accent-purple-600"
-              />
-              <span className="text-sm font-bold text-gray-500">
-                Is Earning?
-              </span>
+
+            {/* --- Earning Toggle --- */}
+            <div className="flex flex-col gap-3 mb-3 bg-white dark:bg-gray-900 p-3 rounded-xl">
+                <div className="flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        checked={newMember.isEarning}
+                        onChange={(e) => {
+                            setNewMember({ 
+                                ...newMember, 
+                                isEarning: e.target.checked,
+                                // If earning, clear studying
+                                isStudying: e.target.checked ? false : newMember.isStudying 
+                            })
+                        }}
+                        className="w-4 h-4 accent-green-600"
+                    />
+                    <span className={`text-sm font-bold ${newMember.isEarning ? "text-green-600" : "text-gray-500"}`}>Is Earning?</span>
+                </div>
+
+                {newMember.isEarning && (
+                    <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 p-2 rounded-lg">
+                            <Briefcase className="w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Occupation"
+                                value={newMember.occupation || ""}
+                                onChange={(e) => setNewMember({ ...newMember, occupation: e.target.value })}
+                                className="w-full bg-transparent outline-none text-xs font-bold"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 p-2 rounded-lg">
+                            <span className="text-gray-400 font-bold">₹</span>
+                            <input
+                                type="number"
+                                placeholder="Income"
+                                value={newMember.monthlyIncome || ""}
+                                onChange={(e) => setNewMember({ ...newMember, monthlyIncome: e.target.value })}
+                                className="w-full bg-transparent outline-none text-xs font-bold"
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
-            {newMember.isEarning && (
-              <div className="grid grid-cols-2 gap-3 mb-4 animate-in fade-in">
-                <input
-                  type="text"
-                  placeholder="Job Title"
-                  value={newMember.occupation || ""}
-                  onChange={(e) =>
-                    setNewMember({ ...newMember, occupation: e.target.value })
-                  }
-                  className="p-3 rounded-xl text-xs bg-white dark:bg-gray-900 font-bold"
-                />
-                <input
-                  type="number"
-                  placeholder="Income"
-                  value={newMember.monthlyIncome || ""}
-                  onChange={(e) =>
-                    setNewMember({
-                      ...newMember,
-                      monthlyIncome: e.target.value,
-                    })
-                  }
-                  className="p-3 rounded-xl text-xs bg-white dark:bg-gray-900 font-bold"
-                />
-              </div>
+
+            {/* --- Education Toggle (Only if NOT earning) --- */}
+            {!newMember.isEarning && (
+                <div className="flex flex-col gap-3 mb-4 bg-white dark:bg-gray-900 p-3 rounded-xl">
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            checked={newMember.isStudying}
+                            onChange={(e) => setNewMember({ ...newMember, isStudying: e.target.checked })}
+                            className="w-4 h-4 accent-blue-600"
+                        />
+                        <span className={`text-sm font-bold ${newMember.isStudying ? "text-blue-600" : "text-gray-500"}`}>Is Studying?</span>
+                    </div>
+
+                    {newMember.isStudying && (
+                        <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
+                            <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 p-2 rounded-lg">
+                                <HomeIcon className="w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="School/College Name"
+                                    value={newMember.schoolName || ""}
+                                    onChange={(e) => setNewMember({ ...newMember, schoolName: e.target.value })}
+                                    className="w-full bg-transparent outline-none text-xs font-bold"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 p-2 rounded-lg">
+                                <GraduationCap className="w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Class (e.g. 5th, B.Com)"
+                                    value={newMember.classStandard || ""}
+                                    onChange={(e) => setNewMember({ ...newMember, classStandard: e.target.value })}
+                                    className="w-full bg-transparent outline-none text-xs font-bold"
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
             )}
+            <div className="mb-4">
+  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">
+    Member Notes (Living Status / Habits / Alcohol)
+  </label>
+  <textarea
+    placeholder="e.g. Lives in village, Takes alcohol, Chronic illness..."
+    value={newMember.memberNotes || ""}
+    onChange={(e) => setNewMember({ ...newMember, memberNotes: e.target.value })}
+    className="w-full p-3 rounded-xl text-xs font-bold bg-white dark:bg-gray-900 outline-none border border-transparent focus:border-red-400 transition-all resize-none"
+    rows={2}
+  />
+</div>
+
             <div className="flex gap-3">
               <button
                 type="button"
@@ -608,7 +704,7 @@ export default function RegisterForm({
                 onClick={addMember}
                 className="flex-1 py-3 text-sm font-bold text-white bg-purple-600 rounded-xl shadow-lg shadow-purple-200 dark:shadow-none"
               >
-                Save
+                Save Member
               </button>
             </div>
           </div>
@@ -617,6 +713,7 @@ export default function RegisterForm({
 
       {/* 4. Housing & Problems */}
       <section className="bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
+        {/* ... Housing & Problem Code ... */}
         <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl mb-6">
           <button
             type="button"
@@ -635,7 +732,6 @@ export default function RegisterForm({
             Rented
           </button>
         </div>
-
         {formData.housingType === "RENT" && (
           <div className="mb-6 animate-in fade-in">
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1 block">
@@ -650,7 +746,6 @@ export default function RegisterForm({
             />
           </div>
         )}
-
         <div className="flex flex-wrap gap-2 mb-4">
           {PROBLEM_TAGS.map((tag) => (
             <button
@@ -725,19 +820,16 @@ export default function RegisterForm({
 
       {/* --- Floating Action Bar --- */}
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 dark:bg-[#020617]/80 backdrop-blur-xl border-t border-gray-200 dark:border-gray-800 z-50">
-        <div className="max-w-3xl mx-auto">
-          {message && (
-            <div
-              className={`mb-4 p-4 rounded-2xl flex items-center gap-3 animate-in slide-in-from-bottom-2 ${message.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
-            >
-              {message.type === "success" ? (
-                <CheckCircle className="w-5 h-5" />
-              ) : (
-                <AlertTriangle className="w-5 h-5" />
-              )}
-              <span className="text-sm font-bold">{message.text}</span>
-            </div>
-          )}
+        <div className="max-w-3xl mx-auto flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => handleBack("/")}
+            disabled={loading}
+            className="p-5 bg-gray-100 dark:bg-gray-800 rounded-[2rem] text-gray-500 active:scale-95 transition-transform"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
           <button
             disabled={
               loading ||
@@ -745,7 +837,7 @@ export default function RegisterForm({
               formData.mobileNumber.length !== 10 ||
               !!aadharStatus
             }
-            className={`w-full py-5 rounded-[2rem] font-black shadow-2xl transition-all active:scale-[0.98] flex justify-center items-center gap-3 ${
+            className={`flex-1 py-5 rounded-[2rem] font-black shadow-2xl transition-all active:scale-[0.98] flex justify-center items-center gap-3 ${
               loading ||
               formData.aadharNumber.length !== 12 ||
               formData.mobileNumber.length !== 10 ||
@@ -766,6 +858,20 @@ export default function RegisterForm({
             )}
           </button>
         </div>
+
+        {/* Toast */}
+        {message && (
+          <div
+            className={`mt-3 p-3 rounded-xl flex items-center justify-center gap-3 animate-in slide-in-from-bottom-2 ${message.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
+          >
+            {message.type === "success" ? (
+              <CheckCircle className="w-4 h-4" />
+            ) : (
+              <AlertTriangle className="w-4 h-4" />
+            )}
+            <span className="text-xs font-bold">{message.text}</span>
+          </div>
+        )}
       </div>
     </form>
   );

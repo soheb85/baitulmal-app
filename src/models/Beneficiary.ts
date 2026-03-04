@@ -1,15 +1,24 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import mongoose, { Schema, Document, Model, CallbackError } from "mongoose";
+import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IFamilyMember {
   name: string;
   relation: "SON" | "DAUGHTER" | "HUSBAND" | "WIFE" | "FATHER" | "MOTHER";
   age: string;
-  isEarning: boolean;
-  occupation: string;
-  monthlyIncome: string; 
-  livesWithFamily: boolean;
   maritalStatus: "SINGLE" | "MARRIED" | "DIVORCED";
+  livesWithFamily: boolean;
+  
+  // --- Economic Status ---
+  isEarning: boolean;
+  occupation: string; // e.g. "Labour", "Driver", "None"
+  monthlyIncome: string; 
+
+  // --- Education Details (New) ---
+  isStudying: boolean;
+  schoolName?: string;     // e.g. "Anjuman High School"
+  classStandard?: string;  // e.g. "9th Std", "B.Sc 1st Year"
+
+  memberNotes?: string;
 }
 
 export interface IBeneficiary extends Document {
@@ -17,16 +26,20 @@ export interface IBeneficiary extends Document {
   aadharNumber: string;
   mobileNumber: string;
   gender: "MALE" | "FEMALE";
-  husbandStatus?: "ALIVE" | "WIDOW" | "ABANDONED" | "DIVORCED" | "DISABLED";
+  husbandStatus?: "ALIVE" | "WIDOW" | "ABANDONED" | "DIVORCED" | "DISABLED" | "NOT_MARRIED";
   aadharPincode: string;
   currentPincode: string;
   currentAddress: string;
+  
+  // Family Counts (Auto-calculated usually)
   sons: number;
   daughters: number;
   otherDependents: number;
   earningMembersCount: number;
   totalFamilyIncome: number;
-  familyMembersDetail: IFamilyMember[];
+  
+  familyMembersDetail: IFamilyMember[]; // <--- Uses updated interface
+  
   housingType: "OWN" | "RENT";
   rentAmount: number;
   problems: string[];
@@ -42,12 +55,13 @@ export interface IBeneficiary extends Document {
     isFullyVerified: boolean;
   };
 
-  distributedYears: number[]; // e.g., [2025, 2026]
+  distributedYears: number[];
 
   distributionHistory: {
     date: Date;
     year: number; 
     status: "COLLECTED";
+    tokenNumber?: number;
   }[];
 
   todayStatus: {
@@ -61,15 +75,25 @@ export interface IBeneficiary extends Document {
   updatedAt: Date;
 }
 
+// --- Updated Sub-Schema ---
 const FamilyMemberSchema = new Schema({
   name: { type: String, required: true },
   relation: { type: String, required: true },
   age: { type: String, required: true },
+  maritalStatus: { type: String, default: "SINGLE" },
+  livesWithFamily: { type: Boolean, default: true },
+  
+  // Earning
   isEarning: { type: Boolean, default: false },
   occupation: { type: String, default: "None" },
   monthlyIncome: { type: String, default: "0" },
-  livesWithFamily: { type: Boolean, default: true },
-  maritalStatus: { type: String, default: "SINGLE" }
+
+  // Education (New Fields)
+  isStudying: { type: Boolean, default: false },
+  schoolName: { type: String, default: "" },
+  classStandard: { type: String, default: "" },
+
+  memberNotes: { type: String, default: "" }
 });
 
 const BeneficiarySchema = new Schema<IBeneficiary, Model<IBeneficiary>, IBeneficiary>(
@@ -82,7 +106,9 @@ const BeneficiarySchema = new Schema<IBeneficiary, Model<IBeneficiary>, IBenefic
     aadharPincode: { type: String, required: true },
     currentPincode: { type: String, required: true },
     currentAddress: { type: String, required: true },
+    
     familyMembersDetail: { type: [FamilyMemberSchema], default: [] },
+    
     sons: { type: Number, default: 0 },
     daughters: { type: Number, default: 0 },
     otherDependents: { type: Number, default: 0 },
@@ -95,17 +121,22 @@ const BeneficiarySchema = new Schema<IBeneficiary, Model<IBeneficiary>, IBenefic
     rejectionReason: { type: String },
     comments: { type: String, trim: true },
     referencedBy: { type: String, trim: true },
+    
     verificationCycle: {
       startDate: { type: Date, default: Date.now },
       endDate: { type: Date }, 
       isFullyVerified: { type: Boolean, default: true }
     },
+    
     distributedYears: { type: [Number], default: [] },
+    
     distributionHistory: [{
         date: { type: Date, required: true },
         year: { type: Number, required: true },
-        status: { type: String, default: "COLLECTED" }
+        status: { type: String, default: "COLLECTED" },
+        tokenNumber: { type: Number }
     }],
+    
     todayStatus: {
       date: { type: Date },
       year: { type: Number },

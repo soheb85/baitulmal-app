@@ -2,13 +2,36 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { searchBeneficiary } from "@/app/actions/searchBeneficiary";
-import { updateBeneficiaryStatus } from "@/app/actions/updateStatus"; // Import the new action
-import { 
-  Search, ArrowLeft, Loader2, CheckCircle2, 
-  XCircle, AlertTriangle, MapPin, Users, Phone, User, SlidersHorizontal, ShieldAlert 
+import { updateBeneficiaryStatus } from "@/app/actions/updateStatus";
+import { useBackNavigation } from "@/hooks/useBackNavigation";
+import NavigationLoader from "@/components/ui/NavigationLoader";
+import {
+  Search,
+  ArrowLeft,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  MapPin,
+  Users,
+  Phone,
+  ShieldAlert,
+  RotateCcw,
+  UserX,
+  Home,
+  Wallet,
+  ChevronDown,
+  ChevronUp,
+  QrCode,
+  X,
+  GraduationCap,
+  School,
+  Briefcase,
+  IndianRupee,
+  StickyNote // Added icon for notes
 } from "lucide-react";
+import { Scanner } from '@yudiel/react-qr-scanner';
 
 // --- Types ---
 type BeneficiaryData = {
@@ -23,198 +46,285 @@ type BeneficiaryData = {
   currentPincode: string;
   familyMembersDetail: any[];
   totalFamilyIncome: number;
+  housingType: string;
+  rentAmount?: number;
+  problems?: string[];
   referencedBy?: string;
   comments?: string;
 };
 
+const VerificationSkeleton = () => (
+  <div className="animate-pulse space-y-4 pt-4 px-4">
+    <div className="h-24 bg-gray-200 dark:bg-gray-800 rounded-2xl w-full" />
+    <div className="h-40 bg-gray-100 dark:bg-gray-900 rounded-2xl w-full" />
+    <div className="h-10 bg-gray-200 dark:bg-gray-800 rounded-xl w-full" />
+  </div>
+);
+
 export default function VerifyPage() {
-  // Search State
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<BeneficiaryData | null>(null);
   const [error, setError] = useState("");
-  
-  // Status Update State
   const [isUpdating, setIsUpdating] = useState(false);
   const [showBlockForm, setShowBlockForm] = useState(false);
   const [blockReason, setBlockReason] = useState("");
+  const [expandFamily, setExpandFamily] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
-  // --- Search Handler ---
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query) return;
+  const { isNavigating, handleBack } = useBackNavigation("/");
+
+  const performSearch = async (searchValue: string) => {
+    if (!searchValue) return;
     setLoading(true);
     setError("");
     setData(null);
-    setShowBlockForm(false); // Reset form
+    setQuery(searchValue);
+    setShowBlockForm(false);
+    setExpandFamily(false);
 
-    const result = await searchBeneficiary(query);
+    const result = await searchBeneficiary(searchValue);
 
     if (result.success && result.data) {
       setData(result.data as BeneficiaryData);
+      setIsScanning(false);
     } else {
-      setError(result.message || "Not found");
+      setError(result.message || "Beneficiary not found.");
     }
     setLoading(false);
   };
 
-  // --- Status Change Handler ---
-  const handleStatusChange = async (newStatus: "ACTIVE" | "BLACKLISTED" | "ON_HOLD") => {
-    if (!data?._id) return;
-    
-    // Validation
-    if (newStatus === "BLACKLISTED" && !blockReason.trim()) {
-        alert("Please write a reason for blacklisting.");
-        return;
-    }
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    performSearch(query);
+  };
 
-    if(!confirm(`Are you sure you want to mark this person as ${newStatus}?`)) return;
+  const handleScan = (detectedCodes: any[]) => {
+    if (detectedCodes && detectedCodes.length > 0) {
+        const rawValue = detectedCodes[0].rawValue;
+        if (rawValue) performSearch(rawValue);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: "ACTIVE" | "BLACKLISTED") => {
+    if (!data?._id) return;
+    if (newStatus === "BLACKLISTED" && !blockReason.trim()) {
+      alert("Please provide a reason.");
+      return;
+    }
+    if (!confirm(`Mark as ${newStatus}?`)) return;
 
     setIsUpdating(true);
-    
     const result = await updateBeneficiaryStatus(data._id, newStatus, blockReason);
 
     if (result.success) {
-        // Manually update local state to reflect change immediately
-        setData(prev => prev ? ({ ...prev, status: newStatus, rejectionReason: blockReason }) : null);
-        setShowBlockForm(false);
-        setBlockReason("");
+      setData((prev) => prev ? { ...prev, status: newStatus, rejectionReason: blockReason } : null);
+      setShowBlockForm(false);
+      setBlockReason("");
     } else {
-        alert(result.message);
+      alert(result.message);
     }
     setIsUpdating(false);
   };
 
+  if (isNavigating) return <NavigationLoader message="Returning to Home..." />;
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 font-outfit pb-10">
       
-      {/* Header & Search (Same as before) */}
-      <div className="sticky top-0 z-20 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 px-4 pt-4 pb-2">
-        <div className="flex items-center gap-3 mb-4">
-            <Link href="/" className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900">
-                <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-            </Link>
-            <h1 className="font-outfit text-xl font-bold text-gray-900 dark:text-white">Verification</h1>
-        </div>
-        <form onSubmit={handleSearch} className="relative shadow-sm rounded-2xl">
-            <Search className="absolute left-4 top-3.5 h-5 w-5 text-gray-400" />
-            <input 
-                type="tel" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Mobile/Aadhaar..." 
-                className="block w-full pl-11 pr-12 py-3.5 bg-gray-100 dark:bg-gray-900 border-none rounded-2xl font-medium outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-            />
-            <button type="submit" disabled={loading || !query} className="absolute inset-y-1 right-1 px-4 bg-white dark:bg-gray-800 rounded-xl text-blue-600 font-bold shadow-sm">
-                {loading ? <Loader2 className="animate-spin w-5 h-5" /> : "Go"}
+      <div className="sticky top-0 z-30 bg-white/95 dark:bg-gray-950/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shadow-sm">
+        <div className="px-4 py-2">
+          <div className="flex items-center gap-2 mb-2">
+            <button onClick={() => handleBack()} className="p-1.5 -ml-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 transition-transform">
+              <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
             </button>
-        </form>
+            <h1 className="text-base font-bold text-gray-900 dark:text-white">Verify Beneficiary</h1>
+          </div>
+
+          <div className="flex gap-2">
+            <form onSubmit={handleSearchSubmit} className="relative flex-1 flex items-center">
+                <Search className="absolute left-3 w-4 h-4 text-gray-400" />
+                <input type="tel" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Mobile or Aadhaar" className="w-full pl-9 pr-12 py-2.5 bg-gray-100 dark:bg-gray-900 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500/50 transition-all" />
+                <button type="submit" disabled={loading || !query} className="absolute right-1 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg text-blue-600 text-xs font-bold shadow-sm disabled:opacity-50">
+                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : "GO"}
+                </button>
+            </form>
+            <button onClick={() => setIsScanning(true)} className="bg-gray-900 dark:bg-white text-white dark:text-gray-900 p-2.5 rounded-xl shadow-sm active:scale-95 transition-transform">
+                <QrCode className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Main Content */}
-      <div className="px-4 pt-6">
-        {error && (
-            <div className="p-6 bg-red-50 dark:bg-red-900/10 text-center rounded-2xl border border-red-100 dark:border-red-900/30">
-                <AlertTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-                <p className="text-red-700 dark:text-red-300 font-medium">{error}</p>
-            </div>
+      {isScanning && (
+          <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-4">
+              <button onClick={() => setIsScanning(false)} className="absolute top-6 right-6 p-4 bg-white/20 rounded-full text-white backdrop-blur-md z-50"><X className="w-6 h-6" /></button>
+              <div className="w-full max-w-sm rounded-[2.5rem] overflow-hidden border-4 border-white/20 shadow-2xl relative aspect-square">
+                  <Scanner onScan={handleScan} allowMultiple={true} scanDelay={2000} components={{ torch: true, onOff: false }} />
+                  <div className="absolute inset-0 border-[40px] border-black/60 pointer-events-none flex items-center justify-center">
+                      <div className="w-48 h-48 border-2 border-white/50 rounded-2xl relative animate-pulse">
+                          <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-green-500 -mt-1 -ml-1 rounded-tl-lg" />
+                          <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-green-500 -mt-1 -mr-1 rounded-tr-lg" />
+                          <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-green-500 -mb-1 -ml-1 rounded-bl-lg" />
+                          <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-green-500 -mb-1 -mr-1 rounded-br-lg" />
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      <div className="px-4">
+        {loading && <VerificationSkeleton />}
+
+        {!loading && error && (
+          <div className="mt-8 flex flex-col items-center justify-center text-center opacity-70">
+            <UserX className="w-10 h-10 text-gray-400 mb-2" />
+            <p className="text-sm font-medium text-gray-500">{error}</p>
+          </div>
         )}
 
-        {data && (
-            <div className="animate-in slide-in-from-bottom-4 fade-in duration-500 space-y-5">
-                
-                {/* 1. Status Banner */}
-                <div className={`p-6 rounded-3xl border shadow-sm flex justify-between items-start ${
-                    data.status === 'ACTIVE' 
-                    ? 'bg-green-600 text-white border-transparent' 
-                    : 'bg-white dark:bg-gray-900 border-red-100 dark:border-red-900'
-                }`}>
-                    <div>
-                        <p className={`text-xs font-bold tracking-widest uppercase mb-1 ${data.status === 'ACTIVE' ? 'text-green-100' : 'text-gray-500'}`}>Status</p>
-                        <h2 className={`text-3xl font-outfit font-bold ${data.status === 'ACTIVE' ? 'text-white' : 'text-red-600'}`}>{data.status}</h2>
-                        {data.status === 'BLACKLISTED' && <p className="text-xs text-red-800 dark:text-red-200 mt-2 font-semibold bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded">Reason: {data.rejectionReason}</p>}
-                    </div>
-                    {data.status === 'ACTIVE' ? <CheckCircle2 className="w-10 h-10 text-white/80" /> : <XCircle className="w-10 h-10 text-red-500" />}
-                </div>
-
-                {/* 2. Personal Info Card */}
-                <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 space-y-4">
-                    <div>
-                        <h3 className="text-2xl font-bold font-outfit">{data.fullName}</h3>
-                        <p className="font-mono text-gray-500 text-sm mt-1">{data.aadharNumber}</p>
-                    </div>
-                    <div className="space-y-3 pt-2">
-                        <div className="flex gap-3 text-sm text-gray-600 dark:text-gray-300"><Phone className="w-4 h-4" /> {data.mobileNumber}</div>
-                        <div className="flex gap-3 text-sm text-gray-600 dark:text-gray-300"><MapPin className="w-4 h-4" /> {data.currentAddress}</div>
-                        <div className="flex gap-3 text-sm text-gray-600 dark:text-gray-300"><Users className="w-4 h-4" /> {data.familyMembersDetail?.length || 0} Members</div>
-                    </div>
-                </div>
-
-                {/* 3. Action Buttons Area */}
-                <div className="space-y-3 pb-10">
-                    
-                    {/* A) If Active: Show Issue Ration OR Block Option */}
-                    {data.status === 'ACTIVE' && !showBlockForm && (
-                        <>
-                            <button className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-2xl shadow-lg shadow-green-200 dark:shadow-none transition-all active:scale-95">
-                                Issue Ration Kit (Give Food)
-                            </button>
-                            
-                            <button 
-                                onClick={() => setShowBlockForm(true)}
-                                className="w-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-bold py-3 rounded-2xl border border-red-100 dark:border-red-900 hover:bg-red-100 transition-all flex items-center justify-center gap-2"
-                            >
-                                <ShieldAlert className="w-5 h-5" />
-                                Report Issue / Block Person
-                            </button>
-                        </>
-                    )}
-
-                    {/* B) Block/Hold Form (Shows when 'Report Issue' is clicked) */}
-                    {showBlockForm && (
-                        <div className="bg-gray-100 dark:bg-gray-800 p-5 rounded-3xl border border-gray-200 dark:border-gray-700 animate-in zoom-in-95">
-                            <h4 className="font-bold text-gray-900 dark:text-white mb-3">Why are you blocking them?</h4>
-                            <textarea 
-                                value={blockReason}
-                                onChange={(e) => setBlockReason(e.target.value)}
-                                placeholder="e.g. Found they have a government job, Owns a car, etc..."
-                                className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm mb-3 focus:ring-2 focus:ring-red-500 outline-none"
-                                rows={2}
-                            />
-                            <div className="grid grid-cols-2 gap-3">
-                                <button 
-                                    onClick={() => handleStatusChange("BLACKLISTED")}
-                                    disabled={isUpdating}
-                                    className="bg-red-600 text-white font-bold py-3 rounded-xl shadow-md active:scale-95"
-                                >
-                                    {isUpdating ? "Saving..." : "Confirm Blacklist"}
-                                </button>
-                                <button 
-                                    onClick={() => setShowBlockForm(false)}
-                                    disabled={isUpdating}
-                                    className="bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-200 font-bold py-3 rounded-xl border"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* C) If Blacklisted: Show Option to Re-Activate */}
-                    {data.status === 'BLACKLISTED' && (
-                        <div className="bg-red-50 dark:bg-red-900/20 p-5 rounded-3xl border border-red-100 dark:border-red-800 text-center">
-                            <p className="text-red-800 dark:text-red-200 font-medium text-sm mb-3">
-                                This person cannot receive ration because they are Blacklisted.
-                            </p>
-                            <button 
-                                onClick={() => handleStatusChange("ACTIVE")}
-                                disabled={isUpdating}
-                                className="px-6 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-300 active:scale-95"
-                            >
-                                {isUpdating ? "Updating..." : "Mistake? Re-Activate"}
-                            </button>
-                        </div>
-                    )}
-
-                </div>
+        {!loading && data && (
+          <div className="mt-4 space-y-4 animate-in slide-in-from-bottom-2 fade-in duration-300">
+            
+            {/* Status Banner */}
+            <div className={`p-4 rounded-2xl shadow-sm flex items-center justify-between ${data.status === "ACTIVE" ? "bg-green-600 text-white" : "bg-white dark:bg-gray-900 border border-red-200 dark:border-red-900"}`}>
+              <div>
+                <p className={`text-[10px] font-bold uppercase tracking-wider opacity-80 ${data.status === "ACTIVE" ? "text-green-50" : "text-gray-500"}`}>Status</p>
+                <h2 className={`text-xl font-bold ${data.status === "ACTIVE" ? "text-white" : "text-red-600"}`}>{data.status}</h2>
+                {data.status === "BLACKLISTED" && <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded w-fit">{data.rejectionReason}</p>}
+              </div>
+              {data.status === "ACTIVE" ? <CheckCircle2 className="w-8 h-8 text-white/80" /> : <XCircle className="w-8 h-8 text-red-500" />}
             </div>
+
+            {/* Core Details */}
+            <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{data.fullName}</h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-300">{data.aadharNumber}</span>
+                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400 flex items-center gap-1"><Phone className="w-3 h-3" /> {data.mobileNumber}</span>
+                </div>
+              </div>
+
+              <div className="h-px bg-gray-100 dark:bg-gray-800" />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-0.5">
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">Total Income</p>
+                  <div className="flex items-center gap-1.5 text-sm font-bold text-green-600 dark:text-green-400"><IndianRupee className="w-3.5 h-3.5" /> ₹{data.totalFamilyIncome}</div>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">Housing</p>
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-800 dark:text-gray-200"><Home className="w-3.5 h-3.5 text-blue-500" /> {data.housingType}</div>
+                    {data.housingType === 'RENT' && <span className="text-[11px] font-bold text-red-500">Rent: ₹{data.rentAmount}</span>}
+                  </div>
+                </div>
+              </div>
+
+              {data.problems && data.problems.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {data.problems.map((p, i) => (
+                    <span key={i} className="text-[10px] px-2 py-0.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-bold rounded-lg border border-red-100 dark:border-red-900/30 uppercase">{p}</span>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-start gap-2 pt-1">
+                <MapPin className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
+                <p className="text-xs text-gray-600 dark:text-gray-400 leading-snug">{data.currentAddress} - {data.currentPincode}</p>
+              </div>
+            </div>
+
+            {/* Expandable Family Details */}
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+              <button onClick={() => setExpandFamily(!expandFamily)} className="w-full flex items-center justify-between p-4 bg-gray-50/50 dark:bg-gray-800/30 transition-colors">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-purple-500" />
+                  <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Family Members ({data.familyMembersDetail?.length || 0})</span>
+                </div>
+                {expandFamily ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+              </button>
+
+              {expandFamily && (
+                <div className="p-3 space-y-3 border-t border-gray-100 dark:border-gray-800">
+                  {data.familyMembersDetail?.map((m: any, idx: number) => (
+                    <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl space-y-2 border border-gray-100 dark:border-gray-700">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-sm font-bold text-gray-800 dark:text-gray-200 block">{m.name}</span>
+                          <span className="text-[10px] text-gray-400 uppercase font-black">{m.relation} • {m.age} Yrs</span>
+                        </div>
+                        {m.isEarning ? (
+                          <span className="text-[9px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-black uppercase">Earner</span>
+                        ) : m.isStudying ? (
+                          <span className="text-[9px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full font-black uppercase">Student</span>
+                        ) : null}
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1 text-xs">
+                        {m.isEarning ? (
+                          <>
+                            <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400"><Briefcase className="w-3 h-3" /> {m.occupation}</div>
+                            <div className="flex items-center gap-1 text-green-600 font-bold">₹{m.monthlyIncome}</div>
+                          </>
+                        ) : m.isStudying ? (
+                          <>
+                            <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400"><School className="w-3 h-3" /> {m.schoolName || "N/A"}</div>
+                            <div className="flex items-center gap-1 text-purple-600 font-bold"><GraduationCap className="w-3 h-3" /> {m.classStandard || "N/A"}</div>
+                          </>
+                        ) : (
+                          <span className="text-gray-400 italic">No specific activities</span>
+                        )}
+                      </div>
+
+                      {/* --- Member Specific Notes (Habits/Living) --- */}
+                      {m.memberNotes && (
+                        <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 rounded-lg flex items-start gap-2">
+                           <StickyNote className="w-3 h-3 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                           <p className="text-[10px] font-bold text-amber-800 dark:text-amber-200 leading-tight">
+                             {m.memberNotes}
+                           </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Action Bar */}
+            <div className="space-y-3 pb-6">
+              {data.status === "ACTIVE" && !showBlockForm && (
+                <div className="flex gap-3">
+                  <button className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-md text-sm active:scale-95 transition-transform flex items-center justify-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" /> Issue Ration
+                  </button>
+                  <button onClick={() => setShowBlockForm(true)} className="px-4 bg-white dark:bg-gray-900 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 font-bold rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition-transform flex items-center justify-center">
+                    <ShieldAlert className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {showBlockForm && (
+                <div className="bg-red-50 dark:bg-red-900/10 p-4 rounded-2xl border border-red-100 dark:border-red-900/30 animate-in zoom-in-95">
+                  <h4 className="font-bold text-red-800 dark:text-red-200 mb-2 text-xs uppercase">Reason for Blocking</h4>
+                  <textarea value={blockReason} onChange={(e) => setBlockReason(e.target.value)} placeholder="Write reason..." className="w-full p-2.5 rounded-xl border-none bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm font-medium focus:ring-1 focus:ring-red-500 outline-none mb-3" rows={2} />
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowBlockForm(false)} className="flex-1 py-2.5 bg-white dark:bg-gray-800 text-gray-500 font-bold rounded-xl text-xs border border-gray-200 dark:border-gray-700">Cancel</button>
+                    <button onClick={() => handleStatusChange("BLACKLISTED")} disabled={isUpdating} className="flex-1 py-2.5 bg-red-600 text-white font-bold rounded-xl text-xs shadow-sm active:scale-95">{isUpdating ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : "Confirm Block"}</button>
+                  </div>
+                </div>
+              )}
+
+              {data.status === "BLACKLISTED" && (
+                <button onClick={() => handleStatusChange("ACTIVE")} disabled={isUpdating} className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 font-bold py-3 rounded-xl active:scale-95 transition-transform flex items-center justify-center gap-2 text-sm">
+                  {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <><RotateCcw className="w-4 h-4" /> Re-Activate Beneficiary</>}
+                </button>
+              )}
+            </div>
+
+          </div>
         )}
       </div>
     </div>

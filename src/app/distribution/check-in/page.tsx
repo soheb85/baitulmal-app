@@ -4,33 +4,55 @@
 import { useState } from "react";
 import { searchBeneficiary } from "@/app/actions/searchBeneficiary";
 import { checkInBeneficiary, renewVerificationCycle } from "@/app/actions/distributionActions";
+import { useBackNavigation } from "@/hooks/useBackNavigation";
+import NavigationLoader from "@/components/ui/NavigationLoader";
 import { 
   Search, Loader2, ShieldCheck, MapPin, 
   CreditCard, Phone, ArrowLeft, CheckCircle2, AlertTriangle, Clock, 
-  Home, Banknote, RefreshCw, Tag, User, CalendarDays
+  Home, Banknote, RefreshCw, Tag, CalendarDays, QrCode, X 
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+// Import Scanner (Install: npm install @yudiel/react-qr-scanner)
+import { Scanner } from '@yudiel/react-qr-scanner';
 
 export default function CheckInPage() {
   const [query, setQuery] = useState("");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const router = useRouter();
+  const [isScanning, setIsScanning] = useState(false); // Scanner State
+  
+  const { isNavigating, handleBack } = useBackNavigation("/");
 
-  const handleSearch = async (e: React.FormEvent) => {
+  // --- Unified Search Handler ---
+  const performSearch = async (searchValue: string) => {
+      setLoading(true);
+      setData(null);
+      setQuery(searchValue); // Update input for feedback
+      
+      const res = await searchBeneficiary(searchValue);
+      if (res.success) {
+          setData(res.data);
+          setIsScanning(false); // Close scanner on success
+      } else {
+          alert(res.message);
+      }
+      setLoading(false);
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
-    setLoading(true);
-    setData(null);
-    
-    const res = await searchBeneficiary(query);
-    if (res.success) {
-        setData(res.data);
-    } else {
-        alert(res.message);
-    }
-    setLoading(false);
+    performSearch(query);
+  };
+
+  // --- QR Scan Handler ---
+  const handleScan = (detectedCodes: any[]) => {
+      if (detectedCodes && detectedCodes.length > 0) {
+          const rawValue = detectedCodes[0].rawValue;
+          if (rawValue) {
+              performSearch(rawValue);
+          }
+      }
   };
 
   const handleCheckIn = async () => {
@@ -38,7 +60,7 @@ export default function CheckInPage() {
     const res = await checkInBeneficiary(data._id);
     
     if (res.success) {
-      const updatedRes = await searchBeneficiary(query);
+      const updatedRes = await searchBeneficiary(data.mobileNumber || data.aadharNumber); // Refresh data
       if(updatedRes.success) setData(updatedRes.data);
     } else {
       alert(res.message);
@@ -55,7 +77,6 @@ export default function CheckInPage() {
              date.getFullYear() === today.getFullYear();
   };
 
-  // --- Dynamic Action Button / Status ---
   const renderActionSection = () => {
       const status = data.todayStatus?.status;
       const statusDate = data.todayStatus?.date;
@@ -89,41 +110,39 @@ export default function CheckInPage() {
           );
       }
 
-      // Inside renderActionSection...
-if (isExpired) {
-  return (
-    <div className="space-y-4 mb-6">
-      <div className="bg-orange-100 dark:bg-orange-900/30 p-4 rounded-xl border border-orange-200 dark:border-orange-800 text-center">
-        <p className="text-orange-800 dark:text-orange-200 font-bold flex items-center justify-center gap-2">
-          <AlertTriangle className="w-5 h-5" /> Cycle Expired
-        </p>
-        <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
-          This family was last verified 3 years ago.
-        </p>
-      </div>
-      
-      <button 
-        onClick={async () => {
-          if(confirm("Confirm that you have checked their documents and want to renew for 3 years?")) {
-            setProcessing(true);
-            const res = await renewVerificationCycle(data._id);
-            if(res.success) {
-               // Refresh data to show the new "Verify" button
-               const updated = await searchBeneficiary(query);
-               if(updated.success) setData(updated.data);
-            }
-            setProcessing(false);
-          }
-        }}
-        disabled={processing}
-        className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all"
-      >
-        {processing ? <Loader2 className="animate-spin" /> : <RefreshCw className="w-5 h-5" />}
-        RE-VERIFY & RENEW (3 YEARS)
-      </button>
-    </div>
-  );
-}
+      if (isExpired) {
+        return (
+          <div className="space-y-4 mb-6">
+            <div className="bg-orange-100 dark:bg-orange-900/30 p-4 rounded-xl border border-orange-200 dark:border-orange-800 text-center">
+              <p className="text-orange-800 dark:text-orange-200 font-bold flex items-center justify-center gap-2">
+                <AlertTriangle className="w-5 h-5" /> Cycle Expired
+              </p>
+              <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                This family was last verified 3 years ago.
+              </p>
+            </div>
+            
+            <button 
+              onClick={async () => {
+                if(confirm("Confirm that you have checked their documents and want to renew for 3 years?")) {
+                  setProcessing(true);
+                  const res = await renewVerificationCycle(data._id);
+                  if(res.success) {
+                     const updated = await searchBeneficiary(query);
+                     if(updated.success) setData(updated.data);
+                  }
+                  setProcessing(false);
+                }
+              }}
+              disabled={processing}
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all"
+            >
+              {processing ? <Loader2 className="animate-spin" /> : <RefreshCw className="w-5 h-5" />}
+              RE-VERIFY & RENEW (3 YEARS)
+            </button>
+          </div>
+        );
+      }
 
       return (
           <div className="sticky bottom-4 z-10 pt-2">
@@ -143,13 +162,15 @@ if (isExpired) {
       );
   };
 
+  if (isNavigating) return <NavigationLoader message="Returning..." />;
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-5 pb-32 font-outfit">
       
       {/* Header */}
       <div className="mb-6 flex items-center gap-3">
         <button
-          onClick={() => router.back()}
+          onClick={() => handleBack("/")}
           className="p-2 rounded-xl bg-white dark:bg-gray-800 shadow border border-gray-200 dark:border-gray-700 active:scale-95 transition"
         >
           <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
@@ -165,16 +186,65 @@ if (isExpired) {
         </div>
       </div>
       
-      {/* Search */}
-      <form onSubmit={handleSearch} className="relative mb-6 shadow-sm">
-        <input 
-          type="tel" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Mobile or Aadhaar..." 
-          className="w-full p-4 pl-5 pr-14 rounded-2xl border-none bg-white dark:bg-gray-800 text-lg font-medium outline-none ring-1 ring-gray-200 dark:ring-gray-700 focus:ring-2 focus:ring-blue-500 transition-all"
-        />
-        <button type="submit" disabled={loading} className="absolute right-2 top-2 bottom-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-4 rounded-xl flex items-center justify-center">
-          {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <Search className="w-5 h-5" />}
-        </button>
-      </form>
+      {/* --- Search & Scan Row --- */}
+      <div className="flex gap-2 mb-6">
+          <form onSubmit={handleSearchSubmit} className="relative flex-1 shadow-sm">
+            <input 
+              type="text" 
+              value={query} 
+              onChange={e => setQuery(e.target.value)} 
+              placeholder="Mobile, Aadhaar or Scan..." 
+              className="w-full p-4 pl-5 pr-14 rounded-2xl border-none bg-white dark:bg-gray-800 text-lg font-medium outline-none ring-1 ring-gray-200 dark:ring-gray-700 focus:ring-2 focus:ring-blue-500 transition-all"
+            />
+            <button type="submit" disabled={loading} className="absolute right-2 top-2 bottom-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-4 rounded-xl flex items-center justify-center">
+              {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <Search className="w-5 h-5" />}
+            </button>
+          </form>
+
+          {/* SCAN BUTTON */}
+          <button 
+            onClick={() => setIsScanning(true)}
+            className="bg-gray-900 dark:bg-white text-white dark:text-gray-900 p-4 rounded-2xl shadow-lg active:scale-95 transition-transform"
+            title="Scan QR Code"
+          >
+            <QrCode className="w-6 h-6" />
+          </button>
+      </div>
+
+      {/* --- SCANNER MODAL OVERLAY --- */}
+      {isScanning && (
+          <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
+              <button 
+                onClick={() => setIsScanning(false)}
+                className="absolute top-6 right-6 p-4 bg-white/20 rounded-full text-white backdrop-blur-md z-50 hover:bg-white/30"
+              >
+                  <X className="w-6 h-6" />
+              </button>
+              
+              <div className="w-full max-w-sm rounded-[2.5rem] overflow-hidden border-4 border-white/20 shadow-2xl relative aspect-square">
+                  <Scanner 
+                      onScan={handleScan}
+                      allowMultiple={true}
+                      scanDelay={2000}
+                      components={{
+                        torch: true,
+                        onOff: false,
+                      }}
+                  />
+                  
+                  {/* Visual Guide Overlay */}
+                  <div className="absolute inset-0 border-[40px] border-black/60 pointer-events-none flex items-center justify-center">
+                      <div className="w-48 h-48 border-2 border-white/50 rounded-2xl relative animate-pulse">
+                          <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-green-500 -mt-1 -ml-1 rounded-tl-lg" />
+                          <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-green-500 -mt-1 -mr-1 rounded-tr-lg" />
+                          <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-green-500 -mb-1 -ml-1 rounded-bl-lg" />
+                          <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-green-500 -mb-1 -mr-1 rounded-br-lg" />
+                      </div>
+                  </div>
+              </div>
+              <p className="text-white/80 mt-8 font-bold text-lg tracking-wide text-center">Point camera at Beneficiary QR Code</p>
+          </div>
+      )}
 
       {data && (
         <div className="bg-white dark:bg-gray-900 p-5 rounded-3xl shadow-lg border border-gray-100 dark:border-gray-800 animate-in slide-in-from-bottom-6">
@@ -195,12 +265,12 @@ if (isExpired) {
               </span>
            </div>
 
-           {/* --- Cycle Progress (New) --- */}
+           {/* --- Cycle Progress --- */}
            <div className="mb-6 bg-purple-50 dark:bg-purple-900/10 p-4 rounded-2xl border border-purple-100 dark:border-purple-900/30">
               <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
                   <CalendarDays className="w-4 h-4" />
-                  <span className="text-xs font-bold uppercase tracking-wider">3-Year Cycle Progress</span>
+                  <span className="text-xs font-bold uppercase tracking-wider">3-Year Cycle</span>
                 </div>
                 <span className="text-xs font-bold text-purple-700 dark:text-purple-300">
                   Year {Math.min((data.distributedYears?.length || 0) + 1, 3)} of 3

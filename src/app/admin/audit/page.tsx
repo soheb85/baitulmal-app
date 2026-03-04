@@ -1,18 +1,37 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+"use client"; // <--- Converted to Client Component
+
+import { useState, useEffect } from "react";
 import { getAuditLogs } from "@/app/actions/auditActions";
-import { getSession } from "@/app/actions/authActions";
-import { redirect } from "next/navigation";
+// import { getSession } from "@/app/actions/authActions"; // Handled by middleware or action
 import { 
   ArrowLeft, Activity, User, ShieldCheck, 
-  Calendar, Clock, CheckCircle2, UserCircle2 
+  Calendar, Clock, CheckCircle2, UserCircle2, Loader2 
 } from "lucide-react";
-import Link from "next/link";
+import { useBackNavigation } from "@/hooks/useBackNavigation"; // Import Hook
+import NavigationLoader from "@/components/ui/NavigationLoader"; // Import Loader
 
-export default async function AuditPage() {
-  const session = await getSession();
-  if (session?.role !== "SUPER_ADMIN") redirect("/");
+export default function AuditPage() {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const logs = await getAuditLogs();
+  // --- Initialize Navigation Hook ---
+  const { isNavigating, handleBack } = useBackNavigation("/");
+
+  // --- Fetch Logs on Mount ---
+  useEffect(() => {
+    async function fetchData() {
+        setLoading(true);
+        // Assuming getAuditLogs is a Server Action that returns data
+        const data = await getAuditLogs();
+        setLogs(data);
+        setLoading(false);
+    }
+    fetchData();
+  }, []);
+
+  // --- Show Full Screen Loader if Navigating ---
+  if (isNavigating) return <NavigationLoader message="Returning to Dashboard..." />;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#020617] transition-colors duration-500 font-outfit">
@@ -21,12 +40,12 @@ export default async function AuditPage() {
       <header className="sticky top-0 z-20 bg-[#F8FAFC]/80 dark:bg-[#020617]/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-6 py-5">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link 
-              href="/" 
+            <button 
+              onClick={() => handleBack()} // Use hook logic here
               className="group p-2.5 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 hover:border-green-500 transition-all active:scale-95"
             >
               <ArrowLeft className="w-5 h-5 text-gray-500 group-hover:text-green-600" />
-            </Link>
+            </button>
             <div>
               <h1 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">System Audit</h1>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Live Operations Feed</p>
@@ -45,7 +64,9 @@ export default async function AuditPage() {
         <div className="grid grid-cols-2 gap-4 mb-10">
             <div className="bg-white dark:bg-gray-900 p-4 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Logs</p>
-                <p className="text-2xl font-black text-gray-900 dark:text-white">{logs.length}</p>
+                <p className="text-2xl font-black text-gray-900 dark:text-white">
+                    {loading ? "..." : logs.length}
+                </p>
             </div>
             <div className="bg-white dark:bg-gray-900 p-4 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Retention</p>
@@ -56,13 +77,21 @@ export default async function AuditPage() {
         {/* --- Log Timeline --- */}
         <div className="relative space-y-6 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-200 dark:before:via-gray-800 before:to-transparent">
           
-          {logs.length === 0 ? (
+          {loading ? (
+             // Loading State
+             <div className="flex flex-col items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 text-gray-300 animate-spin mb-2" />
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Fetching Activity...</p>
+             </div>
+          ) : logs.length === 0 ? (
+            // Empty State
             <div className="relative flex flex-col items-center justify-center py-20 bg-white dark:bg-gray-900 rounded-[2.5rem] border border-dashed border-gray-200 dark:border-gray-800">
                <Activity className="w-12 h-12 text-gray-200 dark:text-gray-700 mb-4" />
                <p className="text-gray-400 font-medium">No activity data found in this cycle.</p>
             </div>
           ) : (
-            logs.map((log: any, index: number) => (
+            // Data List
+            logs.map((log: any) => (
               <div key={log._id} className="relative flex items-start gap-6 group">
                 
                 {/* Timeline Icon */}
@@ -106,13 +135,13 @@ export default async function AuditPage() {
                   </div>
 
                   <div className="mt-4 flex items-center justify-between">
-                     <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5">
                         <Calendar className="w-3 h-3 text-gray-300" />
                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
                             {new Date(log.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
                         </span>
-                     </div>
-                     <ShieldCheck className="w-4 h-4 text-green-500/30" />
+                      </div>
+                      <ShieldCheck className="w-4 h-4 text-green-500/30" />
                   </div>
                 </div>
               </div>
