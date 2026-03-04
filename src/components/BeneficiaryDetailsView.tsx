@@ -50,12 +50,12 @@ export default function BeneficiaryDetailsView({ data, returnUrl, backLabel }: {
                 <QrCode className="w-5 h-5" />
             </button>
 
-            <Link 
+            {/* <Link 
                href={`/beneficiaries/${data._id}?edit=true&returnTo=${returnUrl}`} 
                className="p-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl active:scale-95 transition-transform"
             >
                 <Edit className="w-5 h-5" />
-            </Link>
+            </Link> */}
             
             <BeneficiaryActions id={data._id} />
         </div>
