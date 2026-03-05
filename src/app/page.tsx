@@ -6,7 +6,8 @@ import { useState, useEffect } from "react";
 import { 
   UserPlus, Search, Users, AlertCircle, LayoutDashboard, 
   ShieldCheck, ListOrdered, BarChart3, PackageCheck, 
-  LogOut, UserCheck, Activity, Lock, Package, FileText, ChevronRight 
+  LogOut, UserCheck, Activity, Lock, Package, FileText, ChevronRight,
+  Database // <-- Added Database Icon
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { getDashboardStats } from "@/app/actions/getDashboardStats";
@@ -49,6 +50,11 @@ export default function DashboardPage() {
   // Progress Bar Calculation
   const totalActive = (stats.total || 0) - (stats.blacklisted || 0);
   const getWidth = (count: number) => (totalActive > 0 ? (count / totalActive) * 100 : 0);
+
+  // Role Checks
+  const isSuperAdmin = session?.role === "SUPER_ADMIN";
+  const isAdmin = session?.role === "ADMIN";
+  const hasAdminAccess = isSuperAdmin || isAdmin;
 
   // Show Loader if navigating
   if (isNavigating) return <NavigationLoader message="Loading..." />;
@@ -177,22 +183,29 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* 3. Super Admin Console */}
-        {session?.role === "SUPER_ADMIN" && (
+        {/* 3. Admin / Super Admin Console */}
+        {hasAdminAccess && (
           <section className="animate-in fade-in slide-in-from-bottom-4">
             <div className="flex items-center gap-2 mb-3 ml-1">
                <Lock className="w-4 h-4 text-blue-600" />
-               <h3 className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Super Admin Console</h3>
+               <h3 className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                 {isSuperAdmin ? "Super Admin Console" : "Admin Console"}
+               </h3>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => handleBack("/admin/users")} className="flex flex-col p-4 bg-white dark:bg-gray-900 rounded-[2rem] border border-blue-100 dark:border-blue-900/30 shadow-sm active:scale-95 transition-all text-left">
-                 <div className="bg-blue-50 dark:bg-blue-900/50 p-3 rounded-2xl w-fit mb-3">
-                   <UserCheck className="w-6 h-6 text-blue-600" />
-                 </div>
-                 <h3 className="font-black text-gray-900 dark:text-white text-sm">Users</h3>
-                 <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-tighter">Approvals</p>
-              </button>
+              
+              {/* Only Super Admin sees Users */}
+              {isSuperAdmin && (
+                <button onClick={() => handleBack("/admin/users")} className="flex flex-col p-4 bg-white dark:bg-gray-900 rounded-[2rem] border border-blue-100 dark:border-blue-900/30 shadow-sm active:scale-95 transition-all text-left">
+                  <div className="bg-blue-50 dark:bg-blue-900/50 p-3 rounded-2xl w-fit mb-3">
+                    <UserCheck className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <h3 className="font-black text-gray-900 dark:text-white text-sm">Users</h3>
+                  <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-tighter">Approvals</p>
+                </button>
+              )}
 
+              {/* Both Super Admin and Admin see Stock */}
               <button onClick={() => handleBack("/admin/inventory")} className="flex flex-col p-4 bg-white dark:bg-gray-900 rounded-[2rem] border border-orange-100 dark:border-orange-900/30 shadow-sm active:scale-95 transition-all text-left">
                  <div className="bg-orange-50 dark:bg-orange-900/50 p-3 rounded-2xl w-fit mb-3">
                    <Package className="w-6 h-6 text-orange-600" />
@@ -201,6 +214,7 @@ export default function DashboardPage() {
                  <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-tighter">Inventory</p>
               </button>
 
+              {/* Both Super Admin and Admin see Reports */}
               <button onClick={() => handleBack("/admin/reports")} className="flex flex-col p-4 bg-white dark:bg-gray-900 rounded-[2rem] border border-green-100 dark:border-green-900/30 shadow-sm active:scale-95 transition-all text-left">
                  <div className="bg-green-50 dark:bg-green-900/50 p-3 rounded-2xl w-fit mb-3">
                    <FileText className="w-6 h-6 text-green-600" />
@@ -209,13 +223,27 @@ export default function DashboardPage() {
                  <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-tighter">Export PDF</p>
               </button>
 
-              <button onClick={() => handleBack("/admin/audit")} className="flex flex-col p-4 bg-white dark:bg-gray-900 rounded-[2rem] border border-purple-100 dark:border-purple-900/30 shadow-sm active:scale-95 transition-all text-left">
-                 <div className="bg-purple-50 dark:bg-purple-900/50 p-3 rounded-2xl w-fit mb-3">
-                   <Activity className="w-6 h-6 text-purple-600" />
-                 </div>
-                 <h3 className="font-black text-gray-900 dark:text-white text-sm">Audit Logs</h3>
-                 <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-tighter">Activity</p>
-              </button>
+              {/* Only Super Admin sees Audit Logs */}
+              {isSuperAdmin && (
+                <button onClick={() => handleBack("/admin/audit")} className="flex flex-col p-4 bg-white dark:bg-gray-900 rounded-[2rem] border border-purple-100 dark:border-purple-900/30 shadow-sm active:scale-95 transition-all text-left">
+                  <div className="bg-purple-50 dark:bg-purple-900/50 p-3 rounded-2xl w-fit mb-3">
+                    <Activity className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <h3 className="font-black text-gray-900 dark:text-white text-sm">Audit Logs</h3>
+                  <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-tighter">Activity</p>
+                </button>
+              )}
+
+              {/* Only Super Admin sees Database Sync */}
+              {isSuperAdmin && (
+                <button onClick={() => handleBack("/admin/migrate")} className="col-span-2 flex flex-col p-4 bg-gradient-to-br from-gray-900 to-gray-800 dark:from-gray-800 dark:to-black rounded-[2rem] shadow-md active:scale-95 transition-all text-left border border-gray-700">
+                  <div className="bg-white/10 p-3 rounded-2xl w-fit mb-3">
+                    <Database className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="font-black text-white text-sm">Database Sync</h3>
+                  <p className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tighter">Migrations & Backups</p>
+                </button>
+              )}
             </div>
           </section>
         )}

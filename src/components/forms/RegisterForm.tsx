@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-// import { useRouter } from "next/navigation"; 
 import { registerBeneficiary } from "@/app/actions/registerBeneficiary";
 import { updateBeneficiary } from "@/app/actions/updateBeneficiary";
 import { checkAadharDuplicate } from "@/app/actions/checkAadhar";
@@ -20,10 +19,9 @@ import {
   ShieldCheck,
   ChevronRight,
   Users,
-  // MapPin, // removed unused import
   X, 
-  GraduationCap, // New Icon for Education
-  Briefcase // New Icon for Job
+  GraduationCap, 
+  Briefcase 
 } from "lucide-react";
 
 // --- Types ---
@@ -35,12 +33,10 @@ type FamilyMember = {
   maritalStatus: "SINGLE" | "MARRIED" | "DIVORCED";
   livesWithFamily: boolean;
   
-  // Earning
   isEarning: boolean;
   occupation: string;
   monthlyIncome: string;
 
-  // Education (New)
   isStudying: boolean;
   schoolName: string;
   classStandard: string;
@@ -94,6 +90,12 @@ export default function RegisterForm({
     mobileNumber: initialData?.mobileNumber || "",
     gender: initialData?.gender || "FEMALE",
     husbandStatus: initialData?.husbandStatus || "ALIVE",
+    
+    // --- NEW: Main Applicant Earning Details ---
+    isEarning: initialData?.isEarning || false,
+    occupation: initialData?.occupation || "",
+    monthlyIncome: initialData?.monthlyIncome || "",
+
     sons: initialData?.sons || 0,
     daughters: initialData?.daughters || 0,
     otherDependents: initialData?.otherDependents || 0,
@@ -113,7 +115,6 @@ export default function RegisterForm({
     initialData?.familyMembersDetail?.map((m: any) => ({
       ...m,
       id: m.id || m._id || generateUniqueId(),
-      // Ensure defaults for new fields if editing old record
       isStudying: m.isStudying || false,
       schoolName: m.schoolName || "",
       classStandard: m.classStandard || ""
@@ -122,7 +123,6 @@ export default function RegisterForm({
 
   const [isAddingMember, setIsAddingMember] = useState(false);
   
-  // Updated New Member State
   const [newMember, setNewMember] = useState<Partial<FamilyMember>>({
     relation: "SON",
     livesWithFamily: true,
@@ -138,9 +138,7 @@ export default function RegisterForm({
 
   // --- Handlers ---
   const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >,
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     if (name === "aadharNumber" && value.length > 12) return;
@@ -151,15 +149,10 @@ export default function RegisterForm({
   useEffect(() => {
     const checkAadhar = async () => {
       if (formData.aadharNumber.length === 12) {
-        if (isEditMode && formData.aadharNumber === initialData?.aadharNumber)
-          return;
+        if (isEditMode && formData.aadharNumber === initialData?.aadharNumber) return;
         const res = await checkAadharDuplicate(formData.aadharNumber);
         if (res.exists)
-          setAadharStatus({
-            exists: true,
-            message: res.message || "Aadhar number already registered",
-            name: res.name,
-          });
+          setAadharStatus({ exists: true, message: res.message || "Aadhar number already registered", name: res.name });
         else setAadharStatus(null);
       } else {
         setAadharStatus(null);
@@ -172,27 +165,18 @@ export default function RegisterForm({
   const updateStats = (list: FamilyMember[]) => {
     const sons = list.filter((m) => m.relation === "SON").length;
     const daughters = list.filter((m) => m.relation === "DAUGHTER").length;
-    const others = list.filter((m) =>
-      ["FATHER", "MOTHER", "HUSBAND"].includes(m.relation),
-    ).length;
-    const earners = list.filter((m) => m.isEarning).length;
-    const income = list.reduce(
-      (sum, m) => sum + Number(m.monthlyIncome || 0),
-      0,
-    );
+    const others = list.filter((m) => ["FATHER", "MOTHER", "HUSBAND"].includes(m.relation)).length;
+    
     setFormData((prev) => ({
       ...prev,
       sons,
       daughters,
       otherDependents: others,
-      earningMembersCount: earners,
-      totalFamilyIncome: income,
     }));
   };
 
   const addMember = () => {
-    if (!newMember.name || !newMember.age)
-      return alert("Please enter Name and Age");
+    if (!newMember.name || !newMember.age) return alert("Please enter Name and Age");
     
     const member: FamilyMember = {
       id: generateUniqueId(),
@@ -215,17 +199,9 @@ export default function RegisterForm({
     updateStats(updatedList);
     setIsAddingMember(false);
     
-    // Reset Form
     setNewMember({
-      relation: "SON",
-      livesWithFamily: true,
-      isEarning: false,
-      maritalStatus: "SINGLE",
-      occupation: "",
-      monthlyIncome: "",
-      isStudying: false,
-      schoolName: "",
-      classStandard: ""
+      relation: "SON", livesWithFamily: true, isEarning: false, maritalStatus: "SINGLE",
+      occupation: "", monthlyIncome: "", isStudying: false, schoolName: "", classStandard: ""
     });
   };
 
@@ -254,16 +230,25 @@ export default function RegisterForm({
   // --- Submit Handler ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (
-      formData.aadharNumber.length !== 12 ||
-      formData.mobileNumber.length !== 10
-    )
-      return;
+    if (formData.aadharNumber.length !== 12 || formData.mobileNumber.length !== 10) return;
 
     setLoading(true);
-    const finalData = { ...formData, familyMembersDetail: familyMembers };
-    const result =
-      isEditMode && initialData?._id
+
+    // DYNAMICALLY CALCULATE FINAL TOTALS RIGHT BEFORE SUBMIT
+    const familyEarners = familyMembers.filter(m => m.isEarning).length;
+    const familyIncome = familyMembers.reduce((sum, m) => sum + Number(m.monthlyIncome || 0), 0);
+    
+    const totalEarners = familyEarners + (formData.isEarning ? 1 : 0);
+    const totalIncome = familyIncome + Number(formData.monthlyIncome || 0);
+
+    const finalData = { 
+      ...formData, 
+      familyMembersDetail: familyMembers,
+      earningMembersCount: totalEarners,
+      totalFamilyIncome: totalIncome
+    };
+
+    const result = isEditMode && initialData?._id
         ? await updateBeneficiary(initialData._id, finalData)
         : await registerBeneficiary(finalData);
 
@@ -278,14 +263,11 @@ export default function RegisterForm({
     }
   };
 
-  if (isNavigating)
-    return <NavigationLoader message="Processing & Redirecting..." />;
+  if (isNavigating) return <NavigationLoader message="Processing & Redirecting..." />;
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-8 pb-32 max-w-3xl mx-auto font-outfit"
-    >
+    <form onSubmit={handleSubmit} className="space-y-8 pb-32 max-w-3xl mx-auto font-outfit">
+      
       {/* 1. Identity Section */}
       <section className="bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
         <div className="flex items-center gap-3 mb-6">
@@ -324,9 +306,7 @@ export default function RegisterForm({
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">
                   Aadhaar (12 Digits)
                 </label>
-                <span
-                  className={`text-[10px] font-black ${formData.aadharNumber.length === 12 ? "text-green-600" : "text-red-500"}`}
-                >
+                <span className={`text-[10px] font-black ${formData.aadharNumber.length === 12 ? "text-green-600" : "text-red-500"}`}>
                   {formData.aadharNumber.length} / 12
                 </span>
               </div>
@@ -354,9 +334,7 @@ export default function RegisterForm({
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">
                   Mobile (10 Digits)
                 </label>
-                <span
-                  className={`text-[10px] font-black ${formData.mobileNumber.length === 10 ? "text-green-600" : "text-red-500"}`}
-                >
+                <span className={`text-[10px] font-black ${formData.mobileNumber.length === 10 ? "text-green-600" : "text-red-500"}`}>
                   {formData.mobileNumber.length} / 10
                 </span>
               </div>
@@ -407,6 +385,57 @@ export default function RegisterForm({
                 <option value="NOT_MARRIED">Not Married</option>
               </select>
             </div>
+          </div>
+
+          {/* --- NEW: Primary Applicant Earning Status --- */}
+          <div className="flex flex-col gap-3 mt-4 bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
+            <div className="flex items-center gap-2">
+                <input
+                    type="checkbox"
+                    checked={formData.isEarning}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData(prev => ({
+                        ...prev,
+                        isEarning: checked,
+                        // Clear income if they uncheck the box
+                        occupation: checked ? prev.occupation : "",
+                        monthlyIncome: checked ? prev.monthlyIncome : ""
+                      }));
+                    }}
+                    className="w-4 h-4 accent-green-600"
+                />
+                <span className={`text-sm font-bold ${formData.isEarning ? "text-green-600" : "text-gray-500"}`}>
+                    Is the main applicant earning an income?
+                </span>
+            </div>
+
+            {formData.isEarning && (
+                <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 mt-2">
+                    <div className="flex items-center gap-2 bg-white dark:bg-gray-900 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+                        <Briefcase className="w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            name="occupation"
+                            placeholder="Occupation (e.g. Tailor)"
+                            value={formData.occupation}
+                            onChange={handleChange}
+                            className="w-full bg-transparent outline-none text-sm font-bold text-gray-900 dark:text-white"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2 bg-white dark:bg-gray-900 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+                        <span className="text-gray-400 font-bold">₹</span>
+                        <input
+                            type="number"
+                            name="monthlyIncome"
+                            placeholder="Monthly Income"
+                            value={formData.monthlyIncome}
+                            onChange={handleChange}
+                            className="w-full bg-transparent outline-none text-sm font-bold text-gray-900 dark:text-white"
+                        />
+                    </div>
+                </div>
+            )}
           </div>
         </div>
       </section>
@@ -468,7 +497,7 @@ export default function RegisterForm({
         </div>
       </section>
 
-      {/* 3. Family Members (Updated Logic) */}
+      {/* 3. Family Members */}
       <section className="bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
@@ -538,7 +567,6 @@ export default function RegisterForm({
               New Member Details
             </h4>
             
-            {/* Name & Age */}
             <div className="grid grid-cols-2 gap-3 mb-3">
               <input
                 type="text"
@@ -560,7 +588,6 @@ export default function RegisterForm({
               />
             </div>
 
-            {/* Relations */}
             <div className="grid grid-cols-2 gap-3 mb-3">
               <select
                 value={newMember.relation}
@@ -594,7 +621,7 @@ export default function RegisterForm({
               </select>
             </div>
 
-            {/* --- Earning Toggle --- */}
+            {/* Earning Toggle */}
             <div className="flex flex-col gap-3 mb-3 bg-white dark:bg-gray-900 p-3 rounded-xl">
                 <div className="flex items-center gap-2">
                     <input
@@ -604,7 +631,6 @@ export default function RegisterForm({
                             setNewMember({ 
                                 ...newMember, 
                                 isEarning: e.target.checked,
-                                // If earning, clear studying
                                 isStudying: e.target.checked ? false : newMember.isStudying 
                             })
                         }}
@@ -639,7 +665,7 @@ export default function RegisterForm({
                 )}
             </div>
 
-            {/* --- Education Toggle (Only if NOT earning) --- */}
+            {/* Education Toggle */}
             {!newMember.isEarning && (
                 <div className="flex flex-col gap-3 mb-4 bg-white dark:bg-gray-900 p-3 rounded-xl">
                     <div className="flex items-center gap-2">
@@ -658,7 +684,7 @@ export default function RegisterForm({
                                 <HomeIcon className="w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
-                                    placeholder="School/College Name"
+                                    placeholder="School/College"
                                     value={newMember.schoolName || ""}
                                     onChange={(e) => setNewMember({ ...newMember, schoolName: e.target.value })}
                                     className="w-full bg-transparent outline-none text-xs font-bold"
@@ -668,7 +694,7 @@ export default function RegisterForm({
                                 <GraduationCap className="w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
-                                    placeholder="Class (e.g. 5th, B.Com)"
+                                    placeholder="Class (e.g. 5th)"
                                     value={newMember.classStandard || ""}
                                     onChange={(e) => setNewMember({ ...newMember, classStandard: e.target.value })}
                                     className="w-full bg-transparent outline-none text-xs font-bold"
@@ -678,18 +704,19 @@ export default function RegisterForm({
                     )}
                 </div>
             )}
+
             <div className="mb-4">
-  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">
-    Member Notes (Living Status / Habits / Alcohol)
-  </label>
-  <textarea
-    placeholder="e.g. Lives in village, Takes alcohol, Chronic illness..."
-    value={newMember.memberNotes || ""}
-    onChange={(e) => setNewMember({ ...newMember, memberNotes: e.target.value })}
-    className="w-full p-3 rounded-xl text-xs font-bold bg-white dark:bg-gray-900 outline-none border border-transparent focus:border-red-400 transition-all resize-none"
-    rows={2}
-  />
-</div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">
+                Member Notes (Living Status / Habits / Alcohol)
+              </label>
+              <textarea
+                placeholder="e.g. Lives in village, Takes alcohol, Chronic illness..."
+                value={newMember.memberNotes || ""}
+                onChange={(e) => setNewMember({ ...newMember, memberNotes: e.target.value })}
+                className="w-full p-3 rounded-xl text-xs font-bold bg-white dark:bg-gray-900 outline-none border border-transparent focus:border-red-400 transition-all resize-none"
+                rows={2}
+              />
+            </div>
 
             <div className="flex gap-3">
               <button
@@ -713,7 +740,6 @@ export default function RegisterForm({
 
       {/* 4. Housing & Problems */}
       <section className="bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
-        {/* ... Housing & Problem Code ... */}
         <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl mb-6">
           <button
             type="button"

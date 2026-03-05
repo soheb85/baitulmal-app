@@ -2,9 +2,9 @@
 "use server";
 
 import { connectDB } from "@/lib/mongoose";
-import Beneficiary from "@/models/Beneficiary";
+import Beneficiary, { Counter } from "@/models/Beneficiary"; // Import Counter from your model file
 import { revalidatePath } from "next/cache";
-import { logAction } from "@/lib/logger"; // Imported logger
+import { logAction } from "@/lib/logger";
 import Inventory from "@/models/Inventory";
 
 // Helper to get the current year for annual tracking
@@ -14,8 +14,10 @@ const currentYear = new Date().getFullYear();
 export async function checkInBeneficiary(id: string) {
   await connectDB();
   const now = new Date();
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  
+  // Create a YYYY-MM-DD string to track the "Distribution Day"
+  // This allows tokens to persist if the work continues past midnight
+  const queueDateString = now.toISOString().split("T")[0]; 
 
   try {
     const person = await Beneficiary.findById(id);
@@ -29,18 +31,7 @@ export async function checkInBeneficiary(id: string) {
       };
     }
 
-    // 2. Verify 3-Year Cycle Expiry
-    if (person.verificationCycle?.endDate) {
-      const expiryDate = new Date(person.verificationCycle.endDate);
-      if (now > expiryDate) {
-        return {
-          success: false,
-          message: "Verification Cycle Expired. Please perform full re-verification.",
-        };
-      }
-    }
-
-    // 3. Check if already distributed THIS YEAR (Annual Check)
+    // 2. Annual Check (Has this person already taken ration this Ramadan/Year?)
     if (person.distributedYears?.includes(currentYear)) {
       return {
         success: false,
@@ -48,33 +39,38 @@ export async function checkInBeneficiary(id: string) {
       };
     }
 
-    // 4. Daily Duplicate Check (Already in queue today)
-    if (person.todayStatus && person.todayStatus.date) {
-      const lastStatusDate = new Date(person.todayStatus.date);
-      if (lastStatusDate >= todayStart) {
-        if (person.todayStatus.status === "CHECKED_IN") {
-          return {
-            success: false,
-            message: `Already in Queue! Token #${person.todayStatus.tokenNumber}`,
-          };
-        }
-        if (person.todayStatus.status === "COLLECTED") {
-          return { success: false, message: "Already collected ration today!" };
-        }
-      }
+    // 3. Robust Queue Check (Handles overnight rollovers)
+    // If they have an active token from ANY date, don't let them check in again
+    if (person.todayStatus && person.todayStatus.status === "CHECKED_IN") {
+      return {
+        success: false,
+        message: `Already in Queue! Token #${person.todayStatus.tokenNumber}`,
+      };
     }
 
-    // 5. Generate Token and Update Status
-    const count = await Beneficiary.countDocuments({
-      "todayStatus.date": { $gte: todayStart },
-      "todayStatus.status": { $in: ["CHECKED_IN", "COLLECTED"] },
-    });
+    // 4. Same-Day Double Collection Check
+    // Prevent checking in if they already collected on the same 'queueDate'
+    if (person.todayStatus?.status === "COLLECTED" && person.todayStatus?.queueDate === queueDateString) {
+      return { success: false, message: "Already collected ration today!" };
+    }
 
+    // 5. ATOMIC TOKEN GENERATION (Prevents Duplicate Tokens)
+    // findOneAndUpdate with $inc is atomic in MongoDB - it "locks" the number during update
+    const counter = await Counter.findOneAndUpdate(
+      { _id: `tokens-${queueDateString}` },
+      { $inc: { seq: 1 } },
+      { upsert: true, new: true } // Create the day's counter if it doesn't exist
+    );
+
+    const newTokenNumber = counter.seq;
+
+    // 6. Update Status
     person.todayStatus = {
       date: now,
+      queueDate: queueDateString,
       year: currentYear,
       status: "CHECKED_IN",
-      tokenNumber: count + 1,
+      tokenNumber: newTokenNumber,
     };
 
     await person.save();
@@ -83,13 +79,13 @@ export async function checkInBeneficiary(id: string) {
     await logAction(
       "CHECK_IN",
       person.fullName,
-      `Verified and added to queue with Token #${count + 1}`
+      `Verified and issued Token #${newTokenNumber}`
     );
 
     revalidatePath("/distribution/live-queue");
     revalidatePath("/distribution/check-in");
 
-    return { success: true, message: `Checked In! Token #${count + 1}` };
+    return { success: true, message: `Checked In! Token #${newTokenNumber}` };
   } catch (error: any) {
     return { success: false, message: error.message };
   }
@@ -108,6 +104,7 @@ export async function markDistributed(id: string) {
       date: new Date(),
       year: currentYear,
       status: "COLLECTED",
+      tokenNumber: beneficiary.todayStatus?.tokenNumber
     });
 
     // 2. Add to annual distributed years array
@@ -115,8 +112,9 @@ export async function markDistributed(id: string) {
       beneficiary.distributedYears.push(currentYear);
     }
 
-    // 3. Update current today status
+    // 3. Update current status to COLLECTED (Removes them from Live Queue)
     beneficiary.todayStatus.status = "COLLECTED";
+    // Important: We DON'T change the queueDate here, we keep the original one
 
     await beneficiary.save();
 
@@ -124,7 +122,7 @@ export async function markDistributed(id: string) {
     await logAction(
       "DISTRIBUTION",
       beneficiary.fullName,
-      `Ration kit handed over for Ramzan ${currentYear}`
+      `Ration kit handed over for year ${currentYear}`
     );
 
     await Inventory.findOneAndUpdate(
@@ -142,44 +140,22 @@ export async function markDistributed(id: string) {
   }
 }
 
-// --- ACTION 3: Get Live Queue (Serialization included) ---
+// --- ACTION 3: Get Live Queue (Fixed for Midnight Rollover) ---
 export async function getLiveQueue() {
   await connectDB();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
-  const queue = await Beneficiary.find({
-    "todayStatus.date": { $gte: today },
-    "todayStatus.status": "CHECKED_IN",
-  })
-    .sort({ "todayStatus.tokenNumber": 1 })
-    .lean();
+  // FIX: Remove date filter. Show everyone whose status is 'CHECKED_IN'.
+  // They only leave the list when marked 'COLLECTED'.
+  const todayQueue = new Date().toISOString().split("T")[0];
 
-  return queue.map((b: any) => ({
-    ...b,
-    _id: b._id.toString(),
-    createdAt: b.createdAt ? new Date(b.createdAt).toISOString() : null,
-    updatedAt: b.updatedAt ? new Date(b.updatedAt).toISOString() : null,
-    todayStatus: {
-      ...b.todayStatus,
-      date: b.todayStatus.date
-        ? new Date(b.todayStatus.date).toISOString()
-        : null,
-    },
-    familyMembersDetail: Array.isArray(b.familyMembersDetail)
-      ? b.familyMembersDetail.map((m: any) => ({
-          ...m,
-          _id: m._id ? m._id.toString() : undefined,
-        }))
-      : [],
-    distributionHistory: Array.isArray(b.distributionHistory)
-      ? b.distributionHistory.map((h: any) => ({
-          ...h,
-          date: h.date ? new Date(h.date).toISOString() : null,
-          _id: h._id ? h._id.toString() : undefined,
-        }))
-      : [],
-  }));
+const queue = await Beneficiary.find({
+  "todayStatus.status": "CHECKED_IN",
+  "todayStatus.queueDate": todayQueue
+})
+.sort({ "todayStatus.tokenNumber": 1 })
+.lean();
+
+  return JSON.parse(JSON.stringify(queue));
 }
 
 // --- ACTION 4: Renew Cycle ---
@@ -194,24 +170,21 @@ export async function renewVerificationCycle(id: string) {
     const newExpiry = new Date();
     newExpiry.setFullYear(now.getFullYear() + 3);
 
-    // Update the cycle
     person.verificationCycle = {
       startDate: now,
       endDate: newExpiry,
       isFullyVerified: true,
     };
 
-    // Add a system comment
     const timestamp = now.toLocaleDateString("en-IN");
     person.comments = `[System: Cycle Renewed ${timestamp}] ${person.comments || ""}`;
 
     await person.save();
 
-    // LOG: Renewal Action
     await logAction(
       "RE_VERIFY",
       person.fullName,
-      `3-Year cycle renewed. New expiry: Ramzan ${newExpiry.getFullYear()}`
+      `3-Year cycle renewed. New expiry: ${newExpiry.getFullYear()}`
     );
 
     revalidatePath("/distribution/check-in");

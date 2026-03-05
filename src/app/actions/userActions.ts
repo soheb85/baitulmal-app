@@ -5,63 +5,59 @@ import { connectDB } from "@/lib/mongoose";
 import User from "@/models/User";
 import { getSession } from "./authActions";
 import { revalidatePath } from "next/cache";
-import bcrypt from "bcryptjs"; // Added for password encryption
+import bcrypt from "bcryptjs";
 
-// --- 1. NEW: Register User (For Volunteers) ---
+// --- LIVE AVAILABILITY CHECK ---
+export async function checkAvailability(type: "username" | "email", value: string) {
+  await connectDB();
+  const exists = await User.findOne({ [type]: value }).select("_id").lean();
+  return { available: !exists };
+}
+
+// --- 1. Register User (For Volunteers) ---
 export async function registerUser(formData: any) {
   await connectDB();
   
   try {
-    const { name, username, password } = formData;
+    const { name, username, email, password } = formData;
 
-    // Check if username already exists
-    const existing = await User.findOne({ username });
-    if (existing) {
-      return { success: false, message: "This username is already taken." };
-    }
+    const existingUser = await User.findOne({ username });
+    if (existingUser) return { success: false, message: "This mobile number is already registered." };
 
-    // Hash the password (Lightweight encryption)
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) return { success: false, message: "This email is already registered." };
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create the user (isApproved defaults to false via Model)
     await User.create({
       name,
-      username: username.toLowerCase(),
+      username: username, 
+      email: email.toLowerCase(),
       password: hashedPassword,
       role: "USER", // Default role
-      isApproved: false // Must be approved by Super Admin
+      isApproved: false 
     });
 
-    return { 
-      success: true, 
-      message: "Registration successful! Please ask the Super Admin to approve your account." 
-    };
+    return { success: true, message: "Registration successful! Please ask the Super Admin to approve your account." };
   } catch (error: any) {
     return { success: false, message: "Error: " + error.message };
   }
 }
 
-// --- 2. Fetch Pending Users (Only for Super Admin) ---
+// --- 2. Fetch Pending Users ---
 export async function getPendingUsers() {
   const session = await getSession();
-  
-  // Security check: Only Super Admin can see the list
   if (session?.role !== "SUPER_ADMIN") return [];
 
   await connectDB();
-  // Return plain objects for the Server Component
   const users = await User.find({ isApproved: false }).lean();
-  return users.map((u: any) => ({
-    ...u,
-    _id: u._id.toString()
-  }));
+  return users.map((u: any) => ({ ...u, _id: u._id.toString() }));
 }
 
-// --- 3. Approve a User (Only for Super Admin) ---
-export async function approveUser(userId: string) {
+// --- 3. UPDATED: Approve a User (With Role Selection) ---
+export async function approveUser(userId: string, assignedRole: "USER" | "ADMIN" = "USER") {
   const session = await getSession();
   
-  // Security check: Only Super Admin can perform approval
   if (session?.role !== "SUPER_ADMIN") {
     return { success: false, message: "Unauthorized: Only Super Admin can approve users." };
   }
@@ -69,25 +65,46 @@ export async function approveUser(userId: string) {
   await connectDB();
   
   try {
-    await User.findByIdAndUpdate(userId, { isApproved: true });
+    // Approve the user AND set their chosen role
+    await User.findByIdAndUpdate(userId, { 
+        isApproved: true,
+        role: assignedRole 
+    });
     
-    // Refresh the admin page data
     revalidatePath("/admin/users");
-    return { success: true, message: "User has been approved and can now login!" };
+    return { success: true, message: `User approved successfully as ${assignedRole}!` };
   } catch (error: any) {
     return { success: false, message: "Approval failed: " + error.message };
   }
 }
+
+// --- 4. NEW: Change an Existing User's Role ---
+export async function updateUserRole(userId: string, newRole: "USER" | "ADMIN") {
+  const session = await getSession();
+  if (session?.role !== "SUPER_ADMIN") return { success: false, message: "Unauthorized" };
+
+  await connectDB();
+  try {
+    await User.findByIdAndUpdate(userId, { role: newRole });
+    revalidatePath("/admin/users");
+    return { success: true, message: `User role updated to ${newRole}!` };
+  } catch (error: any) {
+    return { success: false, message: "Update failed: " + error.message };
+  }
+}
+
+// --- 5. UPDATED: Get All Users (Now fetching 'role') ---
 export async function getAllUsers() {
   await connectDB();
-  const users = await User.find({ role: { $ne: "SUPER_ADMIN" } }) // Exclude Super Admin from list if desired
-    .select("name username isApproved _id")
+  const users = await User.find({ role: { $ne: "SUPER_ADMIN" } }) 
+    .select("name username email isApproved role _id") // Fetch role
     .sort({ createdAt: -1 })
     .lean();
 
   return JSON.parse(JSON.stringify(users));
 }
 
+// --- 6. Delete a User ---
 export async function deleteUser(userId: string) {
   try {
     await connectDB();

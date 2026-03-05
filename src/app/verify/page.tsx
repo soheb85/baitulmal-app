@@ -29,11 +29,12 @@ import {
   School,
   Briefcase,
   IndianRupee,
-  StickyNote // Added icon for notes
+  StickyNote,
+  Banknote // Added for economic status header
 } from "lucide-react";
 import { Scanner } from '@yudiel/react-qr-scanner';
 
-// --- Types ---
+// --- Updated Types ---
 type BeneficiaryData = {
   _id: string;
   fullName: string;
@@ -42,9 +43,14 @@ type BeneficiaryData = {
   status: "ACTIVE" | "BLACKLISTED" | "ON_HOLD";
   rejectionReason?: string;
   husbandStatus: string;
+  gender: string;
   currentAddress: string;
   currentPincode: string;
   familyMembersDetail: any[];
+  // --- New Fields ---
+  isEarning: boolean;
+  occupation: string;
+  monthlyIncome: number;
   totalFamilyIncome: number;
   housingType: string;
   rentAmount?: number;
@@ -196,7 +202,7 @@ export default function VerifyPage() {
               {data.status === "ACTIVE" ? <CheckCircle2 className="w-8 h-8 text-white/80" /> : <XCircle className="w-8 h-8 text-red-500" />}
             </div>
 
-            {/* Core Details */}
+            {/* Core Identity Details */}
             <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{data.fullName}</h3>
@@ -206,11 +212,40 @@ export default function VerifyPage() {
                 </div>
               </div>
 
-              <div className="h-px bg-gray-100 dark:bg-gray-800" />
+              {/* --- NEW: Primary Applicant Economic Status (Sync with Profile/Check-In) --- */}
+              <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <Banknote className="w-3 h-3" /> Economic Status
+                </h4>
+                {data.isEarning ? (
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <Briefcase className="w-3.5 h-3.5 text-green-600" />
+                            <div>
+                                <p className="text-[8px] text-gray-500 font-bold uppercase">Occupation</p>
+                                <p className="text-xs font-bold text-gray-900 dark:text-white">{data.occupation}</p>
+                            </div>
+                        </div>
+                        <div className="w-px h-6 bg-gray-200 dark:bg-gray-700" />
+                        <div className="flex items-center gap-2">
+                            <IndianRupee className="w-3.5 h-3.5 text-green-600" />
+                            <div>
+                                <p className="text-[8px] text-gray-500 font-bold uppercase">Income</p>
+                                <p className="text-xs font-bold text-gray-900 dark:text-white">₹{data.monthlyIncome}</p>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2 text-gray-500">
+                        <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+                        <p className="text-xs font-bold italic text-gray-400">Applicant is not earning</p>
+                    </div>
+                )}
+              </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 pt-1">
                 <div className="space-y-0.5">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase">Total Income</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">Family Income</p>
                   <div className="flex items-center gap-1.5 text-sm font-bold text-green-600 dark:text-green-400"><IndianRupee className="w-3.5 h-3.5" /> ₹{data.totalFamilyIncome}</div>
                 </div>
                 <div className="space-y-0.5">
@@ -255,30 +290,35 @@ export default function VerifyPage() {
                           <span className="text-sm font-bold text-gray-800 dark:text-gray-200 block">{m.name}</span>
                           <span className="text-[10px] text-gray-400 uppercase font-black">{m.relation} • {m.age} Yrs</span>
                         </div>
-                        {m.isEarning ? (
-                          <span className="text-[9px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-black uppercase">Earner</span>
-                        ) : m.isStudying ? (
-                          <span className="text-[9px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full font-black uppercase">Student</span>
-                        ) : null}
+                        <div className="flex gap-1">
+                          {m.isEarning && (
+                            <span className="text-[8px] bg-green-500 text-white px-1.5 py-0.5 rounded-full font-black uppercase">Earner</span>
+                          )}
+                          {m.isStudying && (
+                            <span className="text-[8px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full font-black uppercase">Student</span>
+                          )}
+                        </div>
                       </div>
                       
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1 text-xs">
-                        {m.isEarning ? (
-                          <>
-                            <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400"><Briefcase className="w-3 h-3" /> {m.occupation}</div>
-                            <div className="flex items-center gap-1 text-green-600 font-bold">₹{m.monthlyIncome}</div>
-                          </>
-                        ) : m.isStudying ? (
-                          <>
-                            <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400"><School className="w-3 h-3" /> {m.schoolName || "N/A"}</div>
-                            <div className="flex items-center gap-1 text-purple-600 font-bold"><GraduationCap className="w-3 h-3" /> {m.classStandard || "N/A"}</div>
-                          </>
-                        ) : (
-                          <span className="text-gray-400 italic">No specific activities</span>
-                        )}
-                      </div>
+                      {/* --- Member Economic/Education Details --- */}
+                      {(m.isEarning || m.isStudying) && (
+                        <div className="flex flex-col gap-1.5 pt-1 text-[10px] border-t border-gray-200 dark:border-gray-700 mt-1">
+                          {m.isEarning && (
+                            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                <Briefcase className="w-3 h-3 text-green-600" /> 
+                                <span>{m.occupation} (₹{m.monthlyIncome})</span>
+                            </div>
+                          )}
+                          {m.isStudying && (
+                            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                <School className="w-3 h-3 text-blue-600" /> 
+                                <span>{m.schoolName || "N/A"} • Class: {m.classStandard || "N/A"}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                      {/* --- Member Specific Notes (Habits/Living) --- */}
+                      {/* --- Member Specific Notes --- */}
                       {m.memberNotes && (
                         <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 rounded-lg flex items-start gap-2">
                            <StickyNote className="w-3 h-3 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />

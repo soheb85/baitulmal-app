@@ -2,11 +2,11 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { 
   ArrowLeft, Phone, MapPin, Calendar, ShieldCheck, 
-  CalendarDays, History, Home, Wallet, Users, Edit, QrCode, 
-  AlertTriangle, Briefcase, IndianRupee, GraduationCap, School
+  CalendarDays, History, Home, Wallet, Users, QrCode, 
+  AlertTriangle, Briefcase, IndianRupee, GraduationCap, School,
+  UserX, ShieldAlert
 } from "lucide-react";
 import BeneficiaryActions from "@/components/BeneficiaryActions";
 import LegacySync from "@/components/LegacySync";
@@ -14,13 +14,13 @@ import DigitalCardModal from "@/components/DigitalCardModal";
 import { useBackNavigation } from "@/hooks/useBackNavigation";
 import NavigationLoader from "@/components/ui/NavigationLoader";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function BeneficiaryDetailsView({ data, returnUrl, backLabel }: { data: any, returnUrl: string, backLabel: string }) {
   const [showCard, setShowCard] = useState(false);
   const { isNavigating, handleBack } = useBackNavigation(returnUrl);
 
   const yearsTaken = data.distributedYears?.length || 0;
   const isExpired = data.verificationCycle?.endDate && new Date() > new Date(data.verificationCycle.endDate);
+  const isBlacklisted = data.status === 'BLACKLISTED';
 
   if (isNavigating) return <NavigationLoader message="Loading..." />;
 
@@ -49,39 +49,70 @@ export default function BeneficiaryDetailsView({ data, returnUrl, backLabel }: {
             >
                 <QrCode className="w-5 h-5" />
             </button>
-
-            {/* <Link 
-               href={`/beneficiaries/${data._id}?edit=true&returnTo=${returnUrl}`} 
-               className="p-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl active:scale-95 transition-transform"
-            >
-                <Edit className="w-5 h-5" />
-            </Link> */}
-            
             <BeneficiaryActions id={data._id} />
         </div>
       </div>
 
       <div className="px-4 pt-6 max-w-3xl mx-auto space-y-5 pb-20">
 
-        {/* --- 1. Compact Cycle Card --- */}
-        <div className={`p-4 rounded-2xl border shadow-sm flex flex-col gap-3 ${
-            isExpired ? "bg-red-50 border-red-100 dark:bg-red-900/10" : "bg-purple-50 border-purple-100 dark:bg-purple-900/10"
-        }`}>
-            <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                    <ShieldCheck className={`w-5 h-5 ${isExpired ? "text-red-600" : "text-purple-600"}`} />
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${isExpired ? "text-red-700" : "text-purple-700"}`}>
-                    {isExpired ? "Cycle Expired" : "Active Cycle"}
-                    </span>
+        {/* --- NEW: Prominent Blacklist Warning --- */}
+        {isBlacklisted && (
+            <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-100 dark:border-red-900/50 p-5 rounded-[2rem] animate-in zoom-in-95 duration-300">
+                <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-red-600 rounded-xl shadow-lg shadow-red-200 dark:shadow-none">
+                        <UserX className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                        <h3 className="text-red-700 dark:text-red-400 font-black uppercase text-xs tracking-widest">Account Blocked</h3>
+                        <p className="text-[10px] text-red-500 font-bold uppercase">Distribution Suspended</p>
+                    </div>
                 </div>
-                <span className="text-xs font-bold text-purple-900 dark:text-purple-200">{yearsTaken}/3 Years</span>
+                
+                <div className="space-y-3">
+                    <div className="bg-white/60 dark:bg-gray-900/60 p-3 rounded-2xl border border-red-100 dark:border-red-900/30">
+                        <p className="text-[10px] text-gray-400 font-black uppercase mb-1">Reason for Blocking</p>
+                        <p className="text-sm font-bold text-red-700 dark:text-red-300 italic">
+                            &quot;{data.rejectionReason || "No reason specified"}&quot;
+                        </p>
+                    </div>
+
+                    {/* Assuming you store the admin name in data.rejectionBy */}
+                    <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-2">
+                            <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+                                Blocked By: <span className="text-red-600 dark:text-red-400 font-black">{data.rejectionBy || "System Admin"}</span>
+                            </span>
+                        </div>
+                        <span className="text-[10px] font-bold text-gray-400">
+                            {data.updatedAt ? new Date(data.updatedAt).toLocaleDateString() : ""}
+                        </span>
+                    </div>
+                </div>
             </div>
-            <div className="flex gap-1.5">
-                {[1, 2, 3].map((step) => (
-                    <div key={step} className={`h-1.5 flex-1 rounded-full ${step <= yearsTaken ? "bg-purple-600" : "bg-gray-300 dark:bg-gray-700"}`} />
-                ))}
+        )}
+
+        {/* --- 1. Compact Cycle Card --- */}
+        {!isBlacklisted && (
+            <div className={`p-4 rounded-2xl border shadow-sm flex flex-col gap-3 ${
+                isExpired ? "bg-red-50 border-red-100 dark:bg-red-900/10" : "bg-purple-50 border-purple-100 dark:bg-purple-900/10"
+            }`}>
+                <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                        <ShieldCheck className={`w-5 h-5 ${isExpired ? "text-red-600" : "text-purple-600"}`} />
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${isExpired ? "text-red-700" : "text-purple-700"}`}>
+                        {isExpired ? "Cycle Expired" : "Active Cycle"}
+                        </span>
+                    </div>
+                    <span className="text-xs font-bold text-purple-900 dark:text-purple-200">{yearsTaken}/3 Years</span>
+                </div>
+                <div className="flex gap-1.5">
+                    {[1, 2, 3].map((step) => (
+                        <div key={step} className={`h-1.5 flex-1 rounded-full ${step <= yearsTaken ? "bg-purple-600" : "bg-gray-300 dark:bg-gray-700"}`} />
+                    ))}
+                </div>
             </div>
-        </div>
+        )}
 
         {/* --- 2. Identity Card --- */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-800 relative overflow-hidden">
@@ -117,13 +148,45 @@ export default function BeneficiaryDetailsView({ data, returnUrl, backLabel }: {
                     <span className="text-xs font-bold text-gray-500">Reg: {new Date(data.createdAt).toLocaleDateString("en-IN")}</span>
                 </div>
             </div>
+
+            {/* --- Economic Status --- */}
+            <div className="mt-5 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700">
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                    Primary Applicant Economic Status
+                </h4>
+                
+                {data.isEarning ? (
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <Briefcase className="w-4 h-4 text-green-600" />
+                            <div>
+                                <p className="text-[10px] text-gray-500 font-bold uppercase">Occupation</p>
+                                <p className="text-sm font-black text-gray-900 dark:text-white">{data.occupation}</p>
+                            </div>
+                        </div>
+                        <div className="w-px h-8 bg-gray-200 dark:bg-gray-700"></div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-green-600 font-black text-lg">₹</span>
+                            <div>
+                                <p className="text-[10px] text-gray-500 font-bold uppercase">Monthly Income</p>
+                                <p className="text-sm font-black text-gray-900 dark:text-white">{data.monthlyIncome}</p>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2 text-gray-500">
+                        <AlertTriangle className="w-4 h-4 text-orange-500" />
+                        <p className="text-sm font-bold italic">Main applicant is not earning</p>
+                    </div>
+                )}
+            </div>
         </div>
 
         {/* --- 3. Financial & Housing Details --- */}
         <div className="grid grid-cols-2 gap-3">
             <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
-                    <Wallet className="w-3 h-3" /> Total Income
+                    <Wallet className="w-3 h-3" /> Total Family Income
                 </p>
                 <div className="flex flex-col">
                     <span className="text-xl font-bold text-green-600 dark:text-green-400">₹{data.totalFamilyIncome}</span>
@@ -164,7 +227,7 @@ export default function BeneficiaryDetailsView({ data, returnUrl, backLabel }: {
             </div>
         )}
 
-        {/* --- 5. Detailed Family List (Updated with Education & Income) --- */}
+        {/* --- 5. Family Details --- */}
         <div>
             <h3 className="text-xs font-black text-gray-400 uppercase mb-3 ml-1 tracking-widest flex items-center gap-2">
                 <Users className="w-4 h-4" /> Family Details ({data.familyMembersDetail?.length})
@@ -189,7 +252,6 @@ export default function BeneficiaryDetailsView({ data, returnUrl, backLabel }: {
                             </div>
                         </div>
 
-                        {/* Details Grid for Member */}
                         <div className="grid grid-cols-1 gap-2 pt-2 border-t border-gray-50 dark:border-gray-800">
                             {m.isEarning ? (
                                 <div className="flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/50 p-2 rounded-xl">
@@ -218,20 +280,20 @@ export default function BeneficiaryDetailsView({ data, returnUrl, backLabel }: {
                             )}
                             
                             {m.memberNotes && (
-    <div className="flex items-start gap-1.5 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg border border-amber-100 dark:border-amber-900/30">
-      <AlertTriangle className="w-3 h-3 text-amber-600 mt-0.5" />
-      <p className="text-[11px] font-bold text-amber-800 dark:text-amber-200 leading-tight">
-        Note: {m.memberNotes}
-      </p>
-    </div>
-  )}
+                                <div className="flex items-start gap-1.5 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg border border-amber-100 dark:border-amber-900/30">
+                                  <AlertTriangle className="w-3 h-3 text-amber-600 mt-0.5" />
+                                  <p className="text-[11px] font-bold text-amber-800 dark:text-amber-200 leading-tight">
+                                    Note: {m.memberNotes}
+                                  </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 ))}
             </div>
         </div>
 
-        {/* --- 6. History --- */}
+        {/* --- History --- */}
         <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
             <h3 className="text-xs font-black text-gray-400 uppercase mb-4 tracking-widest flex items-center gap-2">
                 <History className="w-4 h-4" /> History
@@ -247,10 +309,10 @@ export default function BeneficiaryDetailsView({ data, returnUrl, backLabel }: {
             <LegacySync id={data._id} currentYears={data.distributedYears} />
         </div>
 
-        {/* --- 7. Notes --- */}
+        {/* --- Admin Notes --- */}
         {data.comments && (
             <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/20 mt-6">
-                <p className="text-xs font-bold text-amber-700 dark:text-amber-500 uppercase mb-1">Notes</p>
+                <p className="text-xs font-bold text-amber-700 dark:text-amber-500 uppercase mb-1">Admin Remarks</p>
                 <p className="text-sm text-amber-900 dark:text-amber-100 italic">&quot;{data.comments}&quot;</p>
             </div>
         )}
