@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react"; // Added useEffect
+import { useSearchParams } from "next/navigation"; // Added useSearchParams
 import { searchBeneficiary } from "@/app/actions/searchBeneficiary";
 import { updateBeneficiaryStatus } from "@/app/actions/updateStatus";
 import { useBackNavigation } from "@/hooks/useBackNavigation";
@@ -30,7 +31,7 @@ import {
   Briefcase,
   IndianRupee,
   StickyNote,
-  Banknote // Added for economic status header
+  Banknote 
 } from "lucide-react";
 import { Scanner } from '@yudiel/react-qr-scanner';
 
@@ -47,7 +48,6 @@ type BeneficiaryData = {
   currentAddress: string;
   currentPincode: string;
   familyMembersDetail: any[];
-  // --- New Fields ---
   isEarning: boolean;
   occupation: string;
   monthlyIncome: number;
@@ -79,6 +79,18 @@ export default function VerifyPage() {
   const [isScanning, setIsScanning] = useState(false);
 
   const { isNavigating, handleBack } = useBackNavigation("/");
+  const searchParams = useSearchParams();
+
+  // --- NEW: Auto-Search Logic ---
+  useEffect(() => {
+    // Look for ?search=... in the URL
+    const autoSearchQuery = searchParams.get("search");
+    if (autoSearchQuery) {
+      setQuery(autoSearchQuery);
+      performSearch(autoSearchQuery);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const performSearch = async (searchValue: string) => {
     if (!searchValue) return;
@@ -212,7 +224,7 @@ export default function VerifyPage() {
                 </div>
               </div>
 
-              {/* --- NEW: Primary Applicant Economic Status (Sync with Profile/Check-In) --- */}
+              {/* Economic Status */}
               <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
                 <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                     <Banknote className="w-3 h-3" /> Economic Status
@@ -300,7 +312,6 @@ export default function VerifyPage() {
                         </div>
                       </div>
                       
-                      {/* --- Member Economic/Education Details --- */}
                       {(m.isEarning || m.isStudying) && (
                         <div className="flex flex-col gap-1.5 pt-1 text-[10px] border-t border-gray-200 dark:border-gray-700 mt-1">
                           {m.isEarning && (
@@ -318,7 +329,6 @@ export default function VerifyPage() {
                         </div>
                       )}
 
-                      {/* --- Member Specific Notes --- */}
                       {m.memberNotes && (
                         <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 rounded-lg flex items-start gap-2">
                            <StickyNote className="w-3 h-3 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />

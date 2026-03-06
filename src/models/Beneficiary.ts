@@ -10,13 +10,13 @@ export interface IFamilyMember {
 
   // --- Economic Status ---
   isEarning: boolean;
-  occupation: string; // e.g. "Labour", "Driver", "None"
+  occupation: string; 
   monthlyIncome: string;
 
   // --- Education Details (New) ---
   isStudying: boolean;
-  schoolName?: string; // e.g. "Anjuman High School"
-  classStandard?: string; // e.g. "9th Std", "B.Sc 1st Year"
+  schoolName?: string; 
+  classStandard?: string; 
 
   memberNotes?: string;
 }
@@ -32,7 +32,8 @@ export interface IBeneficiary extends Document {
     | "ABANDONED"
     | "DIVORCED"
     | "DISABLED"
-    | "NOT_MARRIED";
+    | "NOT_MARRIED"
+    | "OTHERS";
 
   // --- NEW: Primary Applicant Economic Status ---
   isEarning: boolean;
@@ -42,15 +43,18 @@ export interface IBeneficiary extends Document {
   aadharPincode: string;
   currentPincode: string;
   currentAddress: string;
+  area: string;
+  registerDateManual?: Date;
+  isException: boolean; 
 
-  // Family Counts (Auto-calculated usually)
+  // Family Counts 
   sons: number;
   daughters: number;
   otherDependents: number;
   earningMembersCount: number;
   totalFamilyIncome: number;
 
-  familyMembersDetail: IFamilyMember[]; // <--- Uses updated interface
+  familyMembersDetail: IFamilyMember[]; 
 
   housingType: "OWN" | "RENT";
   rentAmount: number;
@@ -89,25 +93,33 @@ export interface IBeneficiary extends Document {
   updatedAt: Date;
 }
 
-// --- Updated Sub-Schema ---
+// --- Updated Sub-Schema with strict Enums ---
 const FamilyMemberSchema = new Schema({
-  name: { type: String, required: true },
-  relation: { type: String, required: true },
+  name: { type: String, required: true, trim: true },
+  relation: { 
+    type: String, 
+    required: true,
+    enum: ["SON", "DAUGHTER", "HUSBAND", "WIFE", "FATHER", "MOTHER"] 
+  },
   age: { type: String, required: true },
-  maritalStatus: { type: String, default: "SINGLE" },
+  maritalStatus: { 
+    type: String, 
+    enum: ["SINGLE", "MARRIED", "DIVORCED"],
+    default: "SINGLE" 
+  },
   livesWithFamily: { type: Boolean, default: true },
 
   // Earning
   isEarning: { type: Boolean, default: false },
-  occupation: { type: String, default: "None" },
-  monthlyIncome: { type: String, default: "0" },
+  occupation: { type: String, default: "None", trim: true },
+  monthlyIncome: { type: String, default: "0", trim: true },
 
-  // Education (New Fields)
+  // Education
   isStudying: { type: Boolean, default: false },
-  schoolName: { type: String, default: "" },
-  classStandard: { type: String, default: "" },
+  schoolName: { type: String, default: "", trim: true },
+  classStandard: { type: String, default: "", trim: true },
 
-  memberNotes: { type: String, default: "" },
+  memberNotes: { type: String, default: "", trim: true },
 });
 
 const BeneficiarySchema = new Schema<
@@ -119,44 +131,76 @@ const BeneficiarySchema = new Schema<
     fullName: { type: String, required: true, trim: true },
     aadharNumber: {
       type: String,
-      required: true,
+      required: [true, "Aadhaar number is required"],
       unique: true,
       index: true,
       trim: true,
+      match: [/^\d{12}$/, "Aadhaar number must be exactly 12 digits"],
     },
-    mobileNumber: { type: String, required: true, unique: true, trim: true },
-    gender: { type: String, enum: ["MALE", "FEMALE"], required: true },
-    husbandStatus: { type: String, default: "ALIVE" },
+    mobileNumber: { 
+      type: String, 
+      required: [true, "Mobile number is required"], 
+      unique: true, 
+      trim: true,
+      match: [/^\d{10}$/, "Mobile number must be exactly 10 digits"],
+    },
+    gender: { 
+      type: String, 
+      enum: ["MALE", "FEMALE"], 
+      required: true 
+    },
+    husbandStatus: { 
+      type: String, 
+      enum: ["ALIVE", "WIDOW", "ABANDONED", "DIVORCED", "DISABLED", "NOT_MARRIED", "OTHERS"],
+      default: "ALIVE" 
+    },
 
-    // --- NEW FIELDS ---
+    // --- ECONOMIC STATUS ---
     isEarning: { type: Boolean, default: false },
-    occupation: { type: String, default: "None" },
-    monthlyIncome: { type: Number, default: 0 },
+    occupation: { type: String, default: "None", trim: true },
+    monthlyIncome: { type: Number, default: 0, min: [0, "Income cannot be negative"] },
 
-    aadharPincode: { type: String, required: true },
-    currentPincode: { type: String, required: true },
-    currentAddress: { type: String, required: true },
+    // --- ADDRESS & PINCODES ---
+    aadharPincode: { 
+      type: String, 
+      required: true,
+      match: [/^\d{6}$/, "Pincode must be exactly 6 digits"],
+    },
+    currentPincode: { 
+      type: String, 
+      required: true,
+      match: [/^\d{6}$/, "Pincode must be exactly 6 digits"],
+    },
+    currentAddress: { type: String, required: true, trim: true },
+    area: { type: String, default: "", trim: true },
+    registerDateManual: { type: Date },
+    isException: { type: Boolean, default: false },
 
+    // --- FAMILY ---
     familyMembersDetail: { type: [FamilyMemberSchema], default: [] },
-
-    sons: { type: Number, default: 0 },
-    daughters: { type: Number, default: 0 },
-    otherDependents: { type: Number, default: 0 },
-    earningMembersCount: { type: Number, default: 0 },
-    totalFamilyIncome: { type: Number, default: 0 },
+    sons: { type: Number, default: 0, min: 0 },
+    daughters: { type: Number, default: 0, min: 0 },
+    otherDependents: { type: Number, default: 0, min: 0 },
+    earningMembersCount: { type: Number, default: 0, min: 0 },
+    totalFamilyIncome: { type: Number, default: 0, min: 0 },
+    
+    // --- HOUSING ---
     housingType: { type: String, enum: ["OWN", "RENT"], default: "OWN" },
-    rentAmount: { type: Number, default: 0 },
+    rentAmount: { type: Number, default: 0, min: 0 },
+    
+    // --- ADMIN STATUS ---
     problems: { type: [String], default: [] },
     status: {
       type: String,
       enum: ["ACTIVE", "BLACKLISTED", "ON_HOLD"],
       default: "ACTIVE",
     },
-    rejectionReason: { type: String },
-    rejectionBy: { type: String, default: "" },
+    rejectionReason: { type: String, trim: true },
+    rejectionBy: { type: String, default: "", trim: true },
     comments: { type: String, trim: true },
     referencedBy: { type: String, trim: true },
 
+    // --- CYCLES & QUEUE ---
     verificationCycle: {
       startDate: { type: Date, default: Date.now },
       endDate: { type: Date },
@@ -169,21 +213,21 @@ const BeneficiarySchema = new Schema<
       {
         date: { type: Date, required: true },
         year: { type: Number, required: true },
-        status: { type: String, default: "COLLECTED" },
-        tokenNumber: { type: Number },
+        status: { type: String, enum: ["COLLECTED"], default: "COLLECTED" },
+        tokenNumber: { type: Number, min: 1 },
       },
     ],
 
     todayStatus: {
       date: { type: Date },
-      queueDate: { type: String }, // Used to keep tokens visible past midnight
+      queueDate: { type: String }, 
       year: { type: Number },
       status: {
         type: String,
-        enum: ["CHECKED_IN", "COLLECTED"],
+        enum: ["CHECKED_IN", "COLLECTED", null],
         default: null,
       },
-      tokenNumber: { type: Number },
+      tokenNumber: { type: Number, min: 1 },
     },
   },
   { timestamps: true },
@@ -212,7 +256,7 @@ const Beneficiary =
   (mongoose.models.Beneficiary as Model<IBeneficiary>) ||
   mongoose.model<IBeneficiary>("Beneficiary", BeneficiarySchema);
 
-  export interface ICounter {
+export interface ICounter {
   _id: string; // e.g., "tokens-2026-03-08"
   seq: number;
 }
@@ -220,11 +264,10 @@ const Beneficiary =
 // 2. Counter Schema
 const CounterSchema = new Schema<ICounter>({
   _id: { type: String, required: true }, 
-  seq: { type: Number, default: 0 }
+  seq: { type: Number, default: 0, min: 0 }
 });
 
 // 3. Counter Model Export
-// We use named export for Counter and keep Beneficiary as default export
 export const Counter = 
   (mongoose.models.Counter as Model<ICounter>) || 
   mongoose.model<ICounter>("Counter", CounterSchema);

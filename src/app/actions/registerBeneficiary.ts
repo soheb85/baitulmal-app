@@ -27,14 +27,20 @@ export async function registerBeneficiary(formData: any) {
 
     // 2. Validate Pincode Logic
     const allowedPincodes = ["400024", "400070"]; 
-    if (!allowedPincodes.includes(formData.currentPincode)) {
-       return { success: false, message: `Area ${formData.currentPincode} is not eligible for this scheme.` };
+    if (!formData.isException && !allowedPincodes.includes(formData.currentPincode)) {
+       return { 
+         success: false, 
+         message: `Area ${formData.currentPincode} is not eligible. If this is an approved special case, please check the 'Special Case Exception' box below.` 
+       };
     }
+
+    const manualDate = formData.registerDateManual ? new Date(formData.registerDateManual) : new Date();
 
     // 3. Create Record with 3-Year Cycle Initialization
     const person = await Beneficiary.create({
       ...formData,
       status: "ACTIVE",
+      registerDateManual: manualDate,
       verificationCycle: {
         startDate: new Date(),
         isFullyVerified: true
@@ -42,11 +48,11 @@ export async function registerBeneficiary(formData: any) {
     });
 
     // --- LOG: Registration Action ---
-    await logAction(
-      "REGISTRATION",
-      person.fullName,
-      `New beneficiary registered from Pincode ${person.currentPincode}`
-    );
+    const logMessage = formData.isException 
+        ? `New beneficiary registered as a SPECIAL EXCEPTION from Pincode ${person.currentPincode}`
+        : `New beneficiary registered from Pincode ${person.currentPincode}`;
+
+    await logAction("REGISTRATION", person.fullName, logMessage);
 
     // 4. Refresh Cache
     revalidatePath("/");

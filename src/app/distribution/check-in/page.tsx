@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react"; // Added useEffect
+import { useSearchParams } from "next/navigation"; // Added useSearchParams
 import { searchBeneficiary } from "@/app/actions/searchBeneficiary";
 import { checkInBeneficiary, renewVerificationCycle } from "@/app/actions/distributionActions";
 import { useBackNavigation } from "@/hooks/useBackNavigation";
@@ -22,6 +23,17 @@ export default function CheckInPage() {
   const [isScanning, setIsScanning] = useState(false); 
   
   const { isNavigating, handleBack } = useBackNavigation("/");
+  const searchParams = useSearchParams();
+
+  // --- NEW: Auto-Search Logic ---
+  useEffect(() => {
+    const autoSearchQuery = searchParams.get("search");
+    if (autoSearchQuery) {
+      setQuery(autoSearchQuery);
+      performSearch(autoSearchQuery);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const performSearch = async (searchValue: string) => {
       setLoading(true);

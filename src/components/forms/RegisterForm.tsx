@@ -81,6 +81,7 @@ export default function RegisterForm({
     exists: boolean;
     message: string;
     name?: string;
+    mobileNumber?: string;
   } | null>(null);
 
   // --- Form State ---
@@ -104,8 +105,13 @@ export default function RegisterForm({
     housingType: initialData?.housingType || "OWN",
     rentAmount: initialData?.rentAmount || 0,
     currentAddress: initialData?.currentAddress || "",
+    
+    // --- NEW FIELD: Area ---
+    area: initialData?.area || "",
+
     aadharPincode: initialData?.aadharPincode || "",
     currentPincode: initialData?.currentPincode || "400024",
+    isException: initialData?.isException || false,
     problems: initialData?.problems || [],
     comments: initialData?.comments || "",
     referencedBy: initialData?.referencedBy || "",
@@ -325,6 +331,9 @@ export default function RegisterForm({
                   <p className="text-[11px] text-red-700 dark:text-red-400 font-bold leading-tight">
                     Duplicate: Registered as {aadharStatus.name}
                   </p>
+                  <p className="text-[11px] text-red-700 dark:text-red-400 font-bold leading-tight">
+                    Duplicate: Registered as {aadharStatus.mobileNumber}
+                  </p>
                 </div>
               )}
             </div>
@@ -465,6 +474,30 @@ export default function RegisterForm({
             placeholder="Building, Room No, Locality..."
             className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none focus:ring-2 focus:ring-blue-500 text-sm font-bold resize-none"
           />
+          
+          {/* --- AREA FIELD (FULL ROW) --- */}
+          <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-2xl">
+            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 block">
+              Area
+            </label>
+            <input
+              required
+              name="area"
+              list="area-options"
+              value={formData.area}
+              onChange={handleChange}
+              type="text"
+              placeholder="e.g. Kurla-400024"
+              className="w-full bg-transparent border-none outline-none font-bold text-gray-900 dark:text-white text-sm"
+            />
+            <datalist id="area-options">
+              <option value="Kurla-400024" />
+              <option value="Saki Naka-400072" />
+              <option value="Bandra-400050" />
+            </datalist>
+          </div>
+
+          {/* --- PINCODES (2 COLUMNS) --- */}
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-2xl">
               <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 block">
@@ -477,9 +510,10 @@ export default function RegisterForm({
                 onChange={handleChange}
                 type="number"
                 placeholder="4XXXXX"
-                className="w-full bg-transparent border-none outline-none font-mono font-bold"
+                className="w-full bg-transparent border-none outline-none font-mono font-bold text-gray-900 dark:text-white"
               />
             </div>
+            
             <div className="bg-blue-50 dark:bg-blue-900/10 p-3 rounded-2xl border border-blue-100 dark:border-blue-900/30">
               <label className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1 block">
                 Current Pincode
@@ -822,7 +856,7 @@ export default function RegisterForm({
       </section>
 
       {/* 5. Reference */}
-      <section className="bg-gradient-to-br from-gray-900 to-gray-800 dark:from-gray-800 dark:to-black p-6 rounded-[2.5rem] text-white shadow-xl">
+      <section className="bg-linear-to-br from-gray-900 to-gray-800 dark:from-gray-800 dark:to-black p-6 rounded-[2.5rem] text-white shadow-xl font-outfit">
         <div className="flex items-center gap-3 mb-4">
           <ShieldCheck className="w-5 h-5 text-green-400" />
           <h3 className="font-bold">Trust Verification</h3>
@@ -842,6 +876,21 @@ export default function RegisterForm({
           placeholder="Additional Admin Notes..."
           className="w-full mt-4 p-4 bg-white/10 rounded-2xl border border-white/10 focus:bg-white/20 outline-none font-medium text-sm placeholder:text-gray-500 text-white transition-all resize-none"
         />
+
+        {/* --- NEW: EXCEPTION CHECKBOX --- */}
+        <div className="flex items-center gap-3 mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl transition-colors hover:bg-red-500/20">
+          <input
+            type="checkbox"
+            checked={formData.isException}
+            onChange={(e) => setFormData(prev => ({ ...prev, isException: e.target.checked }))}
+            className="w-5 h-5 accent-red-500 cursor-pointer"
+          />
+          <div className="flex flex-col cursor-pointer" onClick={() => setFormData(prev => ({ ...prev, isException: !prev.isException }))}>
+            <span className="text-sm font-bold text-red-400">Special Case Exception</span>
+            <span className="text-[10px] text-gray-400 mt-0.5">Bypass pincode area restrictions for this family</span>
+          </div>
+        </div>
+        
       </section>
 
       {/* --- Floating Action Bar --- */}

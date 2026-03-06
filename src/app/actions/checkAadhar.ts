@@ -16,7 +16,8 @@ export async function checkAadharDuplicate(aadhar: string) {
       return { 
         exists: true, 
         message: `Already registered. Verified until Ramzan ${expiryYear}`,
-        name: existing.fullName 
+        name: existing.fullName,
+        mobileNumber: existing.mobileNumber
       };
     }
     

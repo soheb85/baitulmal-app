@@ -4,13 +4,22 @@
 import { connectDB } from "@/lib/mongoose";
 import Beneficiary from "@/models/Beneficiary";
 import { revalidatePath } from "next/cache";
-import { logAction } from "@/lib/logger"; // Imported logger
+import { logAction } from "@/lib/logger"; 
 
 export async function updateBeneficiary(id: string, formData: any) {
   await connectDB();
 
   try {
-    // 1. Update the record
+    // --- 1. NEW: Validate Pincode Logic for Updates ---
+    const allowedPincodes = ["400024", "400070"]; 
+    if (!formData.isException && !allowedPincodes.includes(formData.currentPincode)) {
+       return { 
+         success: false, 
+         message: `Area ${formData.currentPincode} is not eligible. If this is an approved special case, please check the 'Special Case Exception' box.` 
+       };
+    }
+
+    // 2. Update the record
     const updated = await Beneficiary.findByIdAndUpdate(
       id,
       { ...formData },
@@ -21,15 +30,18 @@ export async function updateBeneficiary(id: string, formData: any) {
       return { success: false, message: "Beneficiary not found" };
     }
 
-    // --- 2. LOG: Update Action ---
-    // This records WHO edited the profile and for WHICH beneficiary
+    // --- 3. LOG: Update Action ---
+    const logDetails = formData.isException 
+      ? `Profile updated with SPECIAL EXCEPTION status (Pincode: ${updated.currentPincode})`
+      : `Beneficiary profile updated (Mobile/Address/Family details changed)`;
+
     await logAction(
       "UPDATE_PROFILE",
       updated.fullName,
-      `Beneficiary profile updated (Mobile/Address/Family details changed)`
+      logDetails
     );
 
-    // 3. Refresh all relevant pages
+    // 4. Refresh all relevant pages
     revalidatePath("/");
     revalidatePath("/beneficiaries");
     revalidatePath(`/beneficiaries/${id}`);
