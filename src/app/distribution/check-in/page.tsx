@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect } from "react"; // Added useEffect
+import { useState, useEffect, Suspense } from "react"; // Added useEffect
 import { useSearchParams } from "next/navigation"; // Added useSearchParams
 import { searchBeneficiary } from "@/app/actions/searchBeneficiary";
 import { checkInBeneficiary, renewVerificationCycle } from "@/app/actions/distributionActions";
@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Scanner } from '@yudiel/react-qr-scanner';
 
-export default function CheckInPage() {
+function CheckInContent() {
   const [query, setQuery] = useState("");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -352,5 +352,13 @@ export default function CheckInPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CheckInPage() {
+  return (
+    <Suspense fallback={<NavigationLoader message="Loading Check-In Station..." />}>
+      <CheckInContent />
+    </Suspense>
   );
 }

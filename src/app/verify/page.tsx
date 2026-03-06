@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect } from "react"; // Added useEffect
+import { useState, useEffect, Suspense } from "react"; // Added useEffect
 import { useSearchParams } from "next/navigation"; // Added useSearchParams
 import { searchBeneficiary } from "@/app/actions/searchBeneficiary";
 import { updateBeneficiaryStatus } from "@/app/actions/updateStatus";
@@ -67,7 +67,7 @@ const VerificationSkeleton = () => (
   </div>
 );
 
-export default function VerifyPage() {
+function VerifyContent() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<BeneficiaryData | null>(null);
@@ -378,5 +378,13 @@ export default function VerifyPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={<NavigationLoader message="Loading Search..." />}>
+      <VerifyContent />
+    </Suspense>
   );
 }
