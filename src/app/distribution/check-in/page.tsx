@@ -9,8 +9,8 @@ import NavigationLoader from "@/components/ui/NavigationLoader";
 import { 
   Search, Loader2, ShieldCheck, MapPin, 
   CreditCard, Phone, ArrowLeft, CheckCircle2, AlertTriangle, Clock, 
-  Home, Banknote, RefreshCw, Tag, CalendarDays, QrCode, X,
-  Briefcase, IndianRupee, School, GraduationCap
+  Home, Banknote, RefreshCw, QrCode, X,
+  Briefcase, IndianRupee, School, CalendarDays
 } from "lucide-react";
 import { Scanner } from '@yudiel/react-qr-scanner';
 
@@ -52,52 +52,61 @@ export default function CheckInPage() {
   };
 
   const handleCheckIn = async () => {
+    if (!data?._id) return;
     setProcessing(true);
+    
     const res = await checkInBeneficiary(data._id);
+    
     if (res.success) {
+      // reload latest beneficiary state
       const updatedRes = await searchBeneficiary(data.mobileNumber || data.aadharNumber);
-      if(updatedRes.success) setData(updatedRes.data);
+      if (updatedRes.success) {
+        setData(updatedRes.data);
+      }
     } else {
       alert(res.message);
     }
+    
     setProcessing(false);
   };
 
-  const isCurrentQueue = (queueDate: string) => {
-  if (!queueDate) return false;
-  const todayQueue = new Date().toISOString().split("T")[0];
-  return queueDate === todayQueue;
-};
-
   const renderActionSection = () => {
-      const status = data.todayStatus?.status;
-      // const statusDate = data.todayStatus?.date;
+      const currentYear = new Date().getFullYear();
+      
+      // 1. Bulletproof Checks
+      const isBlacklisted = data.status === 'BLACKLISTED';
       const isExpired = data.verificationCycle?.endDate && new Date() > new Date(data.verificationCycle.endDate);
+      const hasCollectedThisYear = data.distributedYears?.includes(currentYear);
+      
+      // 2. Queue lock (Does not care about date, handles midnight rollover naturally)
+      const isCheckedIn = data.todayStatus?.status === 'CHECKED_IN';
 
-      if (status === 'COLLECTED' && isCurrentQueue(data.todayStatus?.queueDate)) {
-          return (
-              <div className="bg-green-100 dark:bg-green-900/30 p-4 rounded-xl border border-green-200 dark:border-green-800 flex items-center justify-center gap-3 text-green-800 dark:text-green-200 font-bold mb-6">
-                  <CheckCircle2 className="w-6 h-6" /> Ration Collected Today
-              </div>
-          );
-      }
-
-      if (status === 'CHECKED_IN' && isCurrentQueue(data.todayStatus?.queueDate)) {
-          return (
-              <div className="bg-purple-100 dark:bg-purple-900/30 p-4 rounded-xl border border-purple-200 dark:border-purple-800 flex flex-col items-center gap-1 text-purple-800 dark:text-purple-200 font-bold mb-6">
-                  <div className="flex items-center gap-2"><Clock className="w-5 h-5" /> Already in Queue</div>
-                  <div className="text-2xl">Token #{data.todayStatus.tokenNumber}</div>
-              </div>
-          );
-      }
-
-      if (data.status === 'BLACKLISTED') {
+      if (isBlacklisted) {
           return (
               <div className="bg-red-100 dark:bg-red-900/30 p-4 rounded-xl border border-red-200 dark:border-red-800 text-center mb-6">
                   <p className="text-red-800 dark:text-red-200 font-bold flex items-center justify-center gap-2">
                       <AlertTriangle className="w-5 h-5" /> Distribution Blocked
                   </p>
                   <p className="text-sm text-red-700 dark:text-red-300 mt-1">{data.rejectionReason}</p>
+              </div>
+          );
+      }
+
+      // If they collected THIS YEAR, block them.
+      if (hasCollectedThisYear) {
+          return (
+              <div className="bg-green-100 dark:bg-green-900/30 p-4 rounded-xl border border-green-200 dark:border-green-800 flex items-center justify-center gap-3 text-green-800 dark:text-green-200 font-bold mb-6">
+                  <CheckCircle2 className="w-6 h-6" /> Ration Collected for {currentYear}
+              </div>
+          );
+      }
+
+      // If they are in the queue right now, show their token.
+      if (isCheckedIn) {
+          return (
+              <div className="bg-purple-100 dark:bg-purple-900/30 p-4 rounded-xl border border-purple-200 dark:border-purple-800 flex flex-col items-center gap-1 text-purple-800 dark:text-purple-200 font-bold mb-6">
+                  <div className="flex items-center gap-2"><Clock className="w-5 h-5" /> Already in Queue</div>
+                  <div className="text-2xl">Token #{data.todayStatus.tokenNumber}</div>
               </div>
           );
       }
@@ -133,6 +142,7 @@ export default function CheckInPage() {
         );
       }
 
+      // If none of the above, they are clear to generate a token.
       return (
           <div className="sticky bottom-4 z-10 pt-2">
             <button 
@@ -214,7 +224,7 @@ export default function CheckInPage() {
              <span className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase border ${data.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{data.status}</span>
            </div>
 
-           {/* --- NEW: Primary Applicant Economic Status --- */}
+           {/* Economic Status */}
            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700">
                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                     <Banknote className="w-3 h-3" /> Applicant Economic Status

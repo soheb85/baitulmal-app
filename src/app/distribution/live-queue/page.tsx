@@ -19,6 +19,9 @@ import {
   CreditCard,
   ExternalLink,
   Users,
+  Clock,
+  Briefcase,
+  IndianRupee,
 } from "lucide-react";
 
 // --- Helper to format Aadhaar (1234 5678 9012) ---
@@ -27,76 +30,96 @@ const formatAadhaar = (num: string) => {
   return num.toString().replace(/(\d{4})(?=\d)/g, "$1 ");
 };
 
-// --- Skeleton Component ---
-const QueueSkeleton = () => (
-  <div className="space-y-6">
-    {[1, 2].map((i) => (
-      <div
-        key={i}
-        className="bg-white dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-sm animate-pulse"
-      >
-        <div className="flex justify-between items-start mb-4">
-          <div className="space-y-2 w-2/3">
-            <div className="h-8 bg-gray-200 dark:bg-gray-800 rounded-full w-3/4" />
-            <div className="h-4 bg-gray-100 dark:bg-gray-900 rounded-full w-1/2" />
-          </div>
-          <div className="h-12 w-12 bg-purple-100 dark:bg-purple-900/30 rounded-2xl" />
-        </div>
-        <div className="h-20 bg-gray-50 dark:bg-gray-800 rounded-2xl mb-4" />
-        <div className="h-14 bg-gray-200 dark:bg-gray-800 rounded-xl" />
-      </div>
-    ))}
-  </div>
-);
-
 export default function LiveQueuePage() {
   const [queue, setQueue] = useState<any[]>([]);
+  const [distributedCount, setDistributedCount] = useState(0); // NEW STATE FOR COUNT
+  
   const [loading, setLoading] = useState(true);
-  const [isNavigating, setIsNavigating] = useState(false); // NEW STATE FOR BACK NAV
+  const [processing, setProcessing] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  const [selectedPerson, setSelectedPerson] = useState<any>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+
   const router = useRouter();
 
-  // --- Handle Back Navigation with Loader ---
   const handleBack = () => {
     setIsNavigating(true);
     router.push("/");
   };
 
-  // --- Fetch Logic ---
-  const fetchQueue = useCallback(async (isBackground = false) => {
-    if (!isBackground) setLoading(true);
+  const fetchQueue = useCallback(async (bg = false) => {
+    if (!bg) setLoading(true);
 
-    try {
-      const data = await getLiveQueue();
-      setQueue(data);
-    } catch (error) {
-      console.error("Queue fetch error:", error);
-    } finally {
-      if (!isBackground) setLoading(false);
+    const data = await getLiveQueue();
+    
+    // Destructure the new backend response { queue, distributedToday }
+    if (data && data.queue) {
+        setQueue(data.queue);
+        setDistributedCount(data.distributedToday);
+    } else {
+        // Fallback
+        setQueue(data as any); 
     }
+
+    if (!bg) setLoading(false);
   }, []);
 
-  // --- Auto Refresh (Every 10s) ---
   useEffect(() => {
-    fetchQueue(false);
-    const interval = setInterval(() => fetchQueue(true), 10000);
-    return () => clearInterval(interval);
+    let mounted = true;
+
+    const loadQueue = async () => {
+      if (!mounted) return;
+      await fetchQueue(false);
+    };
+
+    loadQueue();
+
+    const interval = setInterval(() => {
+      if (mounted) fetchQueue(true);
+    }, 10000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, [fetchQueue]);
 
-  // --- Handle Distribution ---
-  const handleDistribute = async (id: string, name: string) => {
-    if (!confirm(`Confirm Ration Given to: ${name}?`)) return;
-
-    // Optimistic Update (Remove from UI immediately)
-    setQueue((prev) => prev.filter((p) => p._id !== id));
-
-    const res = await markDistributed(id);
-    if (!res.success) {
-      alert("Error: " + res.message);
-      fetchQueue(false); // Revert on error
-    }
+  // Helper to detect if the token was generated on a previous calendar day
+  const isFromYesterday = (dateString: string) => {
+    if (!dateString) return false;
+    const tokenDate = new Date(dateString);
+    const today = new Date();
+    return tokenDate.getDate() !== today.getDate() || tokenDate.getMonth() !== today.getMonth();
   };
 
-  // --- IF NAVIGATING AWAY: SHOW FULL SCREEN LOADER ---
+  const handleDistribute = (person: any) => {
+    setSelectedPerson(person);
+    setShowConfirm(true);
+  };
+
+  const confirmDistribution = async () => {
+    if (!selectedPerson) return;
+
+    setProcessing(true);
+
+    const res = await markDistributed(selectedPerson._id);
+
+    if (res.success) {
+      setShowConfirm(false);
+      setShowSuccess(true);
+
+      // OPTIMISTIC UPDATES: Remove from queue & Increment the count instantly
+      setQueue((prev) => prev.filter((p) => p._id !== selectedPerson._id));
+      setDistributedCount((prev) => prev + 1); 
+    } else {
+      alert(res.message);
+    }
+
+    setProcessing(false);
+  };
+
   if (isNavigating) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-950 flex flex-col items-center justify-center animate-in fade-in zoom-in-95">
@@ -109,126 +132,127 @@ export default function LiveQueuePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 font-outfit p-4 pb-24">
-      {/* --- Sticky Header --- */}
-      <div className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-xl py-2 mb-6">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleBack} // UPDATED HANDLER
-              className="p-2.5 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 active:scale-95 transition"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
-            </button>
-            <div>
-              <h1 className="text-xl font-black text-purple-700 dark:text-purple-400 leading-none">
-                Station 2
-              </h1>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                Ration Queue
-              </p>
-            </div>
-          </div>
-
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 font-outfit px-3 pb-24">
+      {/* HEADER */}
+      <div className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-xl py-3 mb-4 flex justify-between items-center">
+        <div className="flex items-center gap-3">
           <button
-            onClick={() => fetchQueue(false)}
-            disabled={loading}
-            className="p-3 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 active:scale-95 transition-transform"
+            onClick={handleBack}
+            className="p-2.5 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 active:scale-95 transition"
           >
-            <RefreshCw
-              className={`w-5 h-5 text-gray-600 dark:text-gray-300 ${loading ? "animate-spin" : ""}`}
-            />
+            <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
           </button>
+
+          <div>
+            <h1 className="text-xl font-black text-purple-600 leading-none">Station 2</h1>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Ration Queue</p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => fetchQueue(false)}
+          className="p-3 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 active:scale-95 transition-transform"
+        >
+          <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin text-purple-500" : "text-gray-600 dark:text-gray-300"}`} />
+        </button>
+      </div>
+
+      {/* STATS */}
+      <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="bg-white dark:bg-gray-900 rounded-xl p-4 border border-gray-100 dark:border-gray-800 text-center shadow-sm">
+          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">In Queue</p>
+          <p className="text-3xl font-black text-purple-600">{queue.length}</p>
+        </div>
+
+        <div className="bg-white dark:bg-gray-900 rounded-xl p-4 border border-gray-100 dark:border-gray-800 text-center shadow-sm">
+          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Distributed</p>
+          <p className="text-3xl font-black text-green-600">
+            {distributedCount}
+          </p>
         </div>
       </div>
 
-      {/* --- Content --- */}
+      {/* QUEUE LIST */}
       {loading && queue.length === 0 ? (
-        <QueueSkeleton />
-      ) : queue.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-32 opacity-50">
-          <div className="w-20 h-20 bg-gray-200 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-            <User className="w-10 h-10 text-gray-400" />
-          </div>
-          <p className="text-xl font-bold text-gray-600 dark:text-gray-400">
-            Queue is Empty
-          </p>
-          <p className="text-sm text-gray-400">
-            Waiting for Verification Station...
-          </p>
+          <Loader2 className="w-10 h-10 animate-spin text-purple-500 mb-4" />
+          <p className="font-bold text-gray-500">Loading queue...</p>
+        </div>
+      ) : queue.length === 0 ? (
+        <div className="flex flex-col items-center py-32 opacity-50">
+          <User className="w-16 h-16 mb-4 text-gray-300 dark:text-gray-700" />
+          <p className="text-lg font-bold text-gray-500">Queue is empty</p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {queue.map((person) => (
             <div
               key={person._id}
-              className="relative bg-white dark:bg-gray-900 p-6 rounded-[2rem] shadow-lg border border-purple-100 dark:border-purple-900/30 animate-in slide-in-from-right-5 duration-300"
+              className="relative bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-md animate-in slide-in-from-right-4 duration-300"
             >
-              {/* 1. Header: Name & Token */}
-              <div className="flex justify-between items-start mb-6">
-                <div className="flex-1 min-w-0 pr-4">
-                  <h2 className="text-2xl font-black text-gray-900 dark:text-white leading-tight truncate">
-                    {person.fullName}
-                  </h2>
-                  <div className="flex items-center gap-1.5 mt-1 text-gray-500 dark:text-gray-400">
+              {/* Overnight Indicator */}
+              {isFromYesterday(person.todayStatus.date) && (
+                <div className="absolute -top-3 left-6 bg-orange-500 text-white px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter flex items-center gap-1 shadow-lg">
+                  <Clock className="w-3 h-3" /> Waiting Since Yesterday
+                </div>
+              )}
+
+              {/* HEADER */}
+              <div className="flex justify-between items-start mb-5">
+                <div className="flex-1 pr-3 min-w-0">
+                  <h2 className="text-xl font-black text-gray-900 dark:text-white truncate leading-tight">{person.fullName}</h2>
+                  <div className="flex items-center gap-1.5 text-gray-500 text-xs mt-1">
                     <MapPin className="w-3.5 h-3.5 shrink-0" />
-                    <span className="text-xs font-medium truncate">
-                      {person.currentAddress}
-                    </span>
+                    <span className="truncate">{person.currentAddress}</span>
                   </div>
                 </div>
 
-                <div className="flex flex-col items-center justify-center bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 px-3 py-2 rounded-2xl border border-purple-100 dark:border-purple-800 shrink-0">
-                  <span className="text-[9px] font-black uppercase tracking-widest opacity-60">
-                    Token
-                  </span>
-                  <span className="text-3xl font-black leading-none">
-                    #{person.todayStatus?.tokenNumber}
-                  </span>
+                <div className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-2xl flex flex-col items-center justify-center shrink-0 border border-purple-200 dark:border-purple-800">
+                  <span className="text-[9px] font-black uppercase tracking-widest opacity-70">Token</span>
+                  <span className="font-black text-2xl leading-none">#{person.todayStatus?.tokenNumber}</span>
                 </div>
               </div>
 
-              {/* 2. Identity Verification Box (Aadhaar & Mobile) */}
-              <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 mb-6 space-y-3">
-                {/* Aadhaar Row */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-gray-400" />
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                      Aadhaar
-                    </span>
+              {/* Economic Status Grid */}
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="bg-gray-50 dark:bg-gray-800/50 p-2 rounded-xl border border-gray-100 dark:border-gray-800 flex items-center gap-2">
+                    <Briefcase className="w-3 h-3 text-gray-400" />
+                    <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 truncate">{person.isEarning ? person.occupation : "No Income"}</span>
                   </div>
-                  <span className="font-mono text-lg font-bold text-gray-900 dark:text-white tracking-wide">
+                  <div className="bg-green-50/50 dark:bg-green-900/10 p-2 rounded-xl border border-green-100 dark:border-green-900/20 flex items-center gap-2">
+                    <IndianRupee className="w-3 h-3 text-green-600" />
+                    <span className="text-[10px] font-bold text-green-700 dark:text-green-400 truncate">₹{person.totalFamilyIncome}/Mo</span>
+                  </div>
+               </div>
+
+              {/* DETAILS */}
+              <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl space-y-3 mb-5 border border-gray-100 dark:border-gray-800">
+                <div className="flex justify-between items-center gap-3">
+                  <span className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    <CreditCard className="w-4 h-4" />
+                    Aadhaar
+                  </span>
+                  <span className="font-mono text-sm font-bold text-gray-900 dark:text-gray-100">
                     {formatAadhaar(person.aadharNumber)}
                   </span>
                 </div>
-
+                
                 <div className="h-px bg-gray-200 dark:bg-gray-700 w-full" />
 
-                {/* Mobile & Family Row */}
                 <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-blue-500" />
-                      <span className="font-mono font-bold text-gray-700 dark:text-gray-300">
-                        {person.mobileNumber}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-white dark:bg-gray-700 px-2 py-1 rounded-lg border border-gray-100 dark:border-gray-600">
-                    <Users className="w-3.5 h-3.5 text-orange-500" />
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-200">
-                      {person.familyMembersDetail?.length || 0} Members
-                    </span>
-                  </div>
+                  <span className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    <Phone className="w-4 h-4 text-blue-500" />
+                    Mobile
+                  </span>
+                  <span className="font-bold text-gray-900 dark:text-gray-100">{person.mobileNumber}</span>
                 </div>
               </div>
 
-              {/* 3. Action Buttons */}
+              {/* ACTIONS */}
               <div className="space-y-3">
                 <button
-                  onClick={() => handleDistribute(person._id, person.fullName)}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-2xl shadow-xl shadow-green-200 dark:shadow-none flex items-center justify-center gap-2 text-lg active:scale-95 transition-all"
+                  onClick={() => handleDistribute(person)}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg shadow-green-200 dark:shadow-none text-lg"
                 >
                   <CheckCircle2 className="w-6 h-6" />
                   MARK GIVEN
@@ -236,13 +260,85 @@ export default function LiveQueuePage() {
 
                 <Link
                   href={`/beneficiaries/${person._id}?returnTo=/distribution/live-queue`}
-                  className="flex items-center justify-center gap-2 w-full py-3 text-sm font-bold text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors"
+                  className="flex items-center justify-center gap-2 w-full py-2 text-sm font-bold text-gray-400 hover:text-purple-600 transition-colors"
                 >
-                  View Full Details <ExternalLink className="w-3.5 h-3.5" />
+                  View Full Profile <ExternalLink className="w-3.5 h-3.5" />
                 </Link>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* CONFIRM MODAL */}
+      {showConfirm && selectedPerson && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] p-6 w-full max-w-sm space-y-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <h2 className="font-black text-xl text-center text-gray-900 dark:text-white">
+              Confirm Distribution
+            </h2>
+
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 text-sm space-y-3 border border-gray-100 dark:border-gray-700">
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700 pb-2">
+                <span className="text-gray-500 font-bold">Token</span>
+                <span className="font-black text-purple-600 text-lg leading-none">#{selectedPerson.todayStatus?.tokenNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 font-bold">Name</span>
+                <span className="font-bold text-right dark:text-white">{selectedPerson.fullName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 font-bold">Aadhar Number</span>
+                <span className="font-bold font-mono text-right dark:text-white">{formatAadhaar(selectedPerson.aadharNumber)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 font-bold">Mobile Number</span>
+                <span className="font-bold font-mono text-right dark:text-white">{selectedPerson.mobileNumber}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirm(false)}
+                disabled={processing}
+                className="flex-1 py-3.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-xl active:scale-95 transition-transform border border-gray-200 dark:border-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDistribution}
+                disabled={processing}
+                className="flex-1 py-3.5 bg-green-600 text-white font-black rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-md"
+              >
+                {processing ? <Loader2 className="animate-spin w-5 h-5" /> : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUCCESS MODAL */}
+      {showSuccess && selectedPerson && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] p-8 w-full max-w-sm text-center space-y-4 shadow-2xl animate-in zoom-in-90 duration-300 border-4 border-green-500">
+            <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-2">
+                <CheckCircle2 className="w-10 h-10 text-green-500" />
+            </div>
+
+            <h2 className="font-black text-2xl text-gray-900 dark:text-white">Success!</h2>
+            
+            <div className="text-gray-500">
+                <p className="font-bold text-gray-800 dark:text-gray-200">{selectedPerson.fullName}</p>
+                <p className="text-sm mt-1 font-bold">Token #{selectedPerson.todayStatus?.tokenNumber} completed.</p>
+            </div>
+
+            <button
+              onClick={() => setShowSuccess(false)}
+              className="w-full py-4 mt-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-black rounded-2xl active:scale-95 transition-transform shadow-md"
+            >
+              Continue Next
+            </button>
+          </div>
         </div>
       )}
     </div>
