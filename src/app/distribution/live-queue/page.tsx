@@ -3,7 +3,6 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import {
   getLiveQueue,
   markDistributed,
@@ -18,7 +17,6 @@ import {
   ArrowLeft,
   CreditCard,
   ExternalLink,
-  Users,
   Clock,
   Briefcase,
   IndianRupee,
@@ -32,11 +30,14 @@ const formatAadhaar = (num: string) => {
 
 export default function LiveQueuePage() {
   const [queue, setQueue] = useState<any[]>([]);
-  const [distributedCount, setDistributedCount] = useState(0); // NEW STATE FOR COUNT
+  const [distributedCount, setDistributedCount] = useState(0); 
   
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  
+  // NEW: State to track which specific profile button was clicked
+  const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
 
   const [selectedPerson, setSelectedPerson] = useState<any>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -49,17 +50,21 @@ export default function LiveQueuePage() {
     router.push("/");
   };
 
+  // NEW: Function to handle viewing profile with a loading state
+  const handleViewProfile = (personId: string) => {
+    setViewingProfileId(personId);
+    router.push(`/beneficiaries/${personId}?returnTo=/distribution/live-queue`);
+  };
+
   const fetchQueue = useCallback(async (bg = false) => {
     if (!bg) setLoading(true);
 
     const data = await getLiveQueue();
     
-    // Destructure the new backend response { queue, distributedToday }
     if (data && data.queue) {
         setQueue(data.queue);
         setDistributedCount(data.distributedToday);
     } else {
-        // Fallback
         setQueue(data as any); 
     }
 
@@ -86,7 +91,6 @@ export default function LiveQueuePage() {
     };
   }, [fetchQueue]);
 
-  // Helper to detect if the token was generated on a previous calendar day
   const isFromYesterday = (dateString: string) => {
     if (!dateString) return false;
     const tokenDate = new Date(dateString);
@@ -110,7 +114,6 @@ export default function LiveQueuePage() {
       setShowConfirm(false);
       setShowSuccess(true);
 
-      // OPTIMISTIC UPDATES: Remove from queue & Increment the count instantly
       setQueue((prev) => prev.filter((p) => p._id !== selectedPerson._id));
       setDistributedCount((prev) => prev + 1); 
     } else {
@@ -197,13 +200,17 @@ export default function LiveQueuePage() {
                 </div>
               )}
 
-              {/* HEADER */}
-              <div className="flex justify-between items-start mb-5">
-                <div className="flex-1 pr-3 min-w-0">
-                  <h2 className="text-xl font-black text-gray-900 dark:text-white truncate leading-tight">{person.fullName}</h2>
-                  <div className="flex items-center gap-1.5 text-gray-500 text-xs mt-1">
-                    <MapPin className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{person.currentAddress}</span>
+              {/* --- FIXED HEADER --- */}
+              <div className="flex justify-between items-start mb-5 gap-3">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-black text-gray-900 dark:text-white truncate leading-tight">
+                    {person.fullName}
+                  </h2>
+                  <div className="flex items-start gap-1.5 text-gray-500 text-xs mt-1">
+                    <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span className="line-clamp-2 leading-snug break-words">
+                      {person.currentAddress}
+                    </span>
                   </div>
                 </div>
 
@@ -216,11 +223,11 @@ export default function LiveQueuePage() {
               {/* Economic Status Grid */}
               <div className="grid grid-cols-2 gap-2 mb-4">
                   <div className="bg-gray-50 dark:bg-gray-800/50 p-2 rounded-xl border border-gray-100 dark:border-gray-800 flex items-center gap-2">
-                    <Briefcase className="w-3 h-3 text-gray-400" />
+                    <Briefcase className="w-3 h-3 text-gray-400 shrink-0" />
                     <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 truncate">{person.isEarning ? person.occupation : "No Income"}</span>
                   </div>
                   <div className="bg-green-50/50 dark:bg-green-900/10 p-2 rounded-xl border border-green-100 dark:border-green-900/20 flex items-center gap-2">
-                    <IndianRupee className="w-3 h-3 text-green-600" />
+                    <IndianRupee className="w-3 h-3 text-green-600 shrink-0" />
                     <span className="text-[10px] font-bold text-green-700 dark:text-green-400 truncate">₹{person.totalFamilyIncome}/Mo</span>
                   </div>
                </div>
@@ -258,12 +265,22 @@ export default function LiveQueuePage() {
                   MARK GIVEN
                 </button>
 
-                <Link
-                  href={`/beneficiaries/${person._id}?returnTo=/distribution/live-queue`}
-                  className="flex items-center justify-center gap-2 w-full py-2 text-sm font-bold text-gray-400 hover:text-purple-600 transition-colors"
+                {/* --- NEW PROGRAMMATIC BUTTON WITH SPINNER --- */}
+                <button
+                  onClick={() => handleViewProfile(person._id)}
+                  disabled={viewingProfileId === person._id}
+                  className="flex items-center justify-center gap-2 w-full py-2 text-sm font-bold text-gray-400 hover:text-purple-600 transition-colors disabled:opacity-50"
                 >
-                  View Full Profile <ExternalLink className="w-3.5 h-3.5" />
-                </Link>
+                  {viewingProfileId === person._id ? (
+                    <>
+                      Opening Profile <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    </>
+                  ) : (
+                    <>
+                      View Full Profile <ExternalLink className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           ))}

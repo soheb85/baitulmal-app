@@ -8,7 +8,7 @@ import { useBackNavigation } from "@/hooks/useBackNavigation";
 import NavigationLoader from "@/components/ui/NavigationLoader";
 import { 
   ArrowLeft, FileUp, CheckCircle2, X,
-  Loader2, Table as TableIcon, FileText, AlertCircle
+  Loader2, Table as TableIcon, FileText, AlertCircle, Download
 } from "lucide-react";
 
 export default function ExcelImportPage() {
@@ -44,7 +44,7 @@ export default function ExcelImportPage() {
           aadharNumber: row["Aadhaar No."],
           address: row["Address"],
           area: row["Area"],
-          referredBy: row["Referred by"],
+          referredBy: row["Reffered by"] || row["Referred by"],
           aidDate: row["Aid Date"] 
         }));
 
@@ -63,6 +63,30 @@ export default function ExcelImportPage() {
     setResult(res);
     setPendingData(null);
     setLoading(false);
+  };
+
+  // --- NEW: Create and Download Text File ---
+  const downloadErrorLog = () => {
+    if (!result || !result.errors || result.errors.length === 0) return;
+
+    const logHeader = `Anwarul Quran - Import Error Log\nFile: ${fileName}\nDate: ${new Date().toLocaleString()}\n--------------------------------------------------\n\n`;
+    const logContent = result.errors.join('\n\n');
+    const fullLog = logHeader + logContent;
+
+    // Create a Blob (Binary Large Object) for the text file
+    const blob = new Blob([fullLog], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    
+    // Create a hidden link and click it to trigger download
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Import_Errors_${fileName.replace('.xlsx', '')}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Clean up
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   if (isNavigating) return <NavigationLoader message="Routing..." />;
@@ -149,11 +173,26 @@ export default function ExcelImportPage() {
              </div>
 
              {result.errors?.length > 0 && (
-               <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-100 dark:border-red-800 max-h-40 overflow-y-auto">
-                  <div className="flex items-center gap-2 mb-2 text-red-600"><AlertCircle className="w-4 h-4" /><span className="text-xs font-bold">Row Errors</span></div>
-                  {result.errors.map((err: string, i: number) => (
-                    <p key={i} className="text-[10px] text-red-500 font-medium border-b border-red-100 dark:border-red-900/50 py-1 last:border-0">{err}</p>
-                  ))}
+               <div className="mb-6">
+                 <div className="flex items-center justify-between mb-2">
+                   <div className="flex items-center gap-2 text-red-600">
+                     <AlertCircle className="w-4 h-4" />
+                     <span className="text-xs font-bold uppercase tracking-widest">Row Errors ({result.errors.length})</span>
+                   </div>
+                   {/* NEW: Download Error Log Button */}
+                   <button 
+                     onClick={downloadErrorLog}
+                     className="flex items-center gap-1.5 text-[10px] font-black bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 px-3 py-1.5 rounded-lg active:scale-95 transition-transform"
+                   >
+                     <Download className="w-3 h-3" /> Save Log
+                   </button>
+                 </div>
+                 
+                 <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-100 dark:border-red-800 max-h-40 overflow-y-auto">
+                   {result.errors.map((err: string, i: number) => (
+                     <p key={i} className="text-[10px] text-red-500 font-medium border-b border-red-100 dark:border-red-900/50 py-1 last:border-0">{err}</p>
+                   ))}
+                 </div>
                </div>
              )}
 

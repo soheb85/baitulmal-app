@@ -19,6 +19,7 @@ import {
   Download,
   AlertOctagon,
   DatabaseBackup,
+  ListChecks // <-- Added new icon for Bulk Override
 } from "lucide-react";
 
 export default function AdvancedToolsPage() {
@@ -61,6 +62,15 @@ export default function AdvancedToolsPage() {
           route: "/admin/advanced-tools/direct-override",
           color: "bg-orange-50 dark:bg-orange-900/20",
           borderColor: "border-orange-100 dark:border-orange-800",
+        },
+        // --- NEW BULK OVERRIDE TOOL ---
+        {
+          title: "Bulk Field Override",
+          desc: "Update a specific field for multiple selected users or the entire database at once.",
+          icon: <ListChecks className="w-6 h-6 text-indigo-600" />,
+          route: "/admin/advanced-tools/bulk-override",
+          color: "bg-indigo-50 dark:bg-indigo-900/20",
+          borderColor: "border-indigo-100 dark:border-indigo-800",
         },
       ],
     },

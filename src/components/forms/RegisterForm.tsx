@@ -260,6 +260,11 @@ export default function RegisterForm({
 
     if (result.success) {
       setMessage({ type: "success", text: result.message });
+      // --- FIX: FORCE RESET THE EXCEPTION CHECKBOX ---
+      if (!isEditMode) {
+         setFormData(prev => ({ ...prev, isException: false }));
+      }
+      // -----------------------------------------------
       setTimeout(() => {
         handleBack(isEditMode ? `/beneficiaries/${initialData._id}` : "/");
       }, 1000);

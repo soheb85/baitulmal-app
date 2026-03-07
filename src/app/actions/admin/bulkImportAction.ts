@@ -13,16 +13,21 @@ export async function bulkImportBeneficiaries(data: any[], fileName: string) {
   const errors: string[] = [];
 
   try {
+    // Start at row 2 assuming row 1 is the Excel header
+    let rowNumber = 2; 
+
     for (const row of data) {
       try {
         if (!row.aadharNumber) {
           skipCount++;
+          rowNumber++;
           continue;
         }
 
         const exists = await Beneficiary.findOne({ aadharNumber: String(row.aadharNumber) });
         if (exists) {
           skipCount++;
+          rowNumber++;
           continue;
         }
 
@@ -39,7 +44,7 @@ export async function bulkImportBeneficiaries(data: any[], fileName: string) {
           aadharNumber: String(row.aadharNumber),
           currentAddress: row.address,
           area: row.area || "",
-          referencedBy: row.referredBy || "", // <--- Mapped from Excel Column
+          referencedBy: row.referredBy || "", 
           registerDateManual: manualDate,
           currentPincode: extractedPincode,
           aadharPincode: extractedPincode,
@@ -53,8 +58,10 @@ export async function bulkImportBeneficiaries(data: any[], fileName: string) {
 
         successCount++;
       } catch (e: any) {
-        errors.push(`Error in row ${row.name || 'Unknown'}: ${e.message}`);
+        // Highly detailed error push for the text file log
+        errors.push(`Row ${rowNumber} | Name: ${row.name || 'Unknown'} | Aadhaar: ${row.aadharNumber || 'N/A'} => ${e.message}`);
       }
+      rowNumber++;
     }
 
     await logAction(

@@ -7,7 +7,8 @@ import { useBackNavigation } from "@/hooks/useBackNavigation";
 import NavigationLoader from "@/components/ui/NavigationLoader";
 import { 
   ArrowLeft, Search, UserCog, Edit3, 
-  CheckCircle2, Loader2, AlertTriangle, X, ShieldAlert
+  CheckCircle2, Loader2, AlertTriangle, X, ShieldAlert,
+  CalendarDays
 } from "lucide-react";
 
 // --- STATIC FIELD GROUPS ---
@@ -41,7 +42,7 @@ const STATIC_GROUPS = [
     ]
   },
   {
-    title: "3. Family Counts", // <--- ADDED THIS BACK IN!
+    title: "3. Family Counts", 
     color: "text-teal-600",
     bg: "bg-teal-50 dark:bg-teal-900/10",
     fields: [
@@ -87,7 +88,6 @@ const STATIC_GROUPS = [
   }
 ];
 
-// Helper to safely read nested object and array properties
 const getNestedValue = (obj: any, path: string) => {
   return path.split('.').reduce((acc, part) => acc && acc[part] !== undefined ? acc[part] : undefined, obj);
 };
@@ -141,7 +141,6 @@ export default function DirectOverridePage() {
     else if (editConfig.type === "number") finalValue = Number(finalValue);
     else if (editConfig.type === "date" && finalValue) finalValue = new Date(finalValue);
 
-    // Call the server action. It ONLY updates the exact fieldPath sent.
     const res = await overrideField(selectedUser._id, editConfig.key, finalValue);
     
     if (res.success) {
@@ -154,6 +153,18 @@ export default function DirectOverridePage() {
     }
     
     setIsSaving(false);
+  };
+
+  // Helper to preview 3-year end date
+  const getCalculatedEndDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    
+    d.setFullYear(d.getFullYear() + 3);
+    d.setDate(d.getDate() - 45); // Match the backend logic
+    
+    return d.toISOString().split('T')[0];
   };
 
   if (isNavigating) return <NavigationLoader message="Exiting..." />;
@@ -252,15 +263,13 @@ export default function DirectOverridePage() {
               </div>
             ))}
 
-            {/* --- DYNAMIC GROUP: FAMILY MEMBERS --- */}
-            {/* This is handled dynamically because the array length changes per user! */}
+            {/* Dynamic Group: Family Members */}
             {selectedUser.familyMembersDetail?.length > 0 && (
               <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm">
                 <div className="px-4 py-2 bg-teal-50 dark:bg-teal-900/10 border-b border-gray-200 dark:border-gray-800">
                   <h3 className="text-xs font-black uppercase tracking-widest text-teal-600">7. Family Members (Array)</h3>
                 </div>
                 {selectedUser.familyMembersDetail.map((member: any, mIdx: number) => {
-                  
                   const memberFields = [
                     { label: "Name", key: "name", type: "text" },
                     { label: "Relation", key: "relation", type: "select", options: ["SON", "DAUGHTER", "HUSBAND", "WIFE", "FATHER", "MOTHER"] },
@@ -283,11 +292,8 @@ export default function DirectOverridePage() {
                       </div>
                       <div className="divide-y divide-gray-100 dark:divide-gray-800">
                         {memberFields.map((field) => {
-                          // Crucial: This builds the exact MongoDB path for the array item! 
-                          // Example: familyMembersDetail.0.occupation
                           const dbKey = `familyMembersDetail.${mIdx}.${field.key}`;
                           const val = getNestedValue(selectedUser, dbKey);
-                          
                           return (
                             <div key={dbKey} className="p-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                               <div className="min-w-0 flex-1 pr-3">
@@ -310,7 +316,7 @@ export default function DirectOverridePage() {
               </div>
             )}
 
-            {/* --- DYNAMIC GROUP: DISTRIBUTION HISTORY --- */}
+            {/* Dynamic Group: Distribution History */}
             {selectedUser.distributionHistory?.length > 0 && (
               <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm">
                 <div className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/10 border-b border-gray-200 dark:border-gray-800">
@@ -333,7 +339,6 @@ export default function DirectOverridePage() {
                         {histFields.map((field) => {
                           const dbKey = `distributionHistory.${hIdx}.${field.key}`;
                           const val = getNestedValue(selectedUser, dbKey);
-                          
                           return (
                             <div key={dbKey} className="p-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                               <div className="min-w-0 flex-1 pr-3">
@@ -355,12 +360,11 @@ export default function DirectOverridePage() {
                 })}
               </div>
             )}
-
           </div>
         )}
       </div>
 
-      {/* --- EDIT MODAL (Overlays on top) --- */}
+      {/* --- EDIT MODAL --- */}
       {editConfig && !showConfirm && !showSuccess && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 w-full max-w-xs shadow-2xl animate-in zoom-in-95">
@@ -389,6 +393,20 @@ export default function DirectOverridePage() {
                 ) : (
                   <input type={editConfig.type} value={editConfig.newValue} onChange={(e) => setEditConfig({...editConfig, newValue: e.target.value})} className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 font-mono text-sm font-bold text-orange-600 outline-none focus:ring-2 focus:ring-orange-500" placeholder="New value..." />
                 )}
+                
+                {/* --- NEW: AUTO-CALCULATE PREVIEW --- */}
+                {editConfig.key === "verificationCycle.startDate" && editConfig.newValue && (
+                  <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800 flex items-center gap-2">
+                    <CalendarDays className="w-5 h-5 text-purple-600 shrink-0" />
+                    <div>
+                      <p className="text-[9px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-widest leading-none mb-1">System Auto-Set</p>
+                      <p className="text-xs font-bold text-purple-800 dark:text-purple-300">
+                        End Date: {getCalculatedEndDate(editConfig.newValue)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
               </div>
             </div>
 

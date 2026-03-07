@@ -20,7 +20,7 @@ import {
   ChevronRight,
   Database,
   Wrench,
-  Filter // <-- Added Filter Icon
+  Filter
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { getDashboardStats } from "@/app/actions/getDashboardStats";
@@ -30,6 +30,9 @@ import { useBackNavigation } from "@/hooks/useBackNavigation";
 import NavigationLoader from "@/components/ui/NavigationLoader";
 
 export default function DashboardPage() {
+  // --- NEW: Track if the page is doing its very first data load
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [stats, setStats] = useState<any>({
     total: 0,
@@ -52,15 +55,25 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function init() {
-      const [statsData, cycleData, sessionData] = await Promise.all([
-        getDashboardStats(),
-        getCycleStats(),
-        getSession(),
-      ]);
+      // Start loading
+      setIsInitialLoad(true);
 
-      setStats(statsData);
-      setCycle(cycleData.stats);
-      setSession(sessionData);
+      try {
+        const [statsData, cycleData, sessionData] = await Promise.all([
+          getDashboardStats(),
+          getCycleStats(),
+          getSession(),
+        ]);
+
+        setStats(statsData);
+        setCycle(cycleData.stats);
+        setSession(sessionData);
+      } catch (error) {
+        console.error("Failed to load dashboard data:", error);
+      } finally {
+        // Stop loading ONLY after all data is fully set in state
+        setIsInitialLoad(false);
+      }
     }
     init();
   }, []);
@@ -78,10 +91,14 @@ export default function DashboardPage() {
   const isAdmin = session?.role === "ADMIN";
   const hasAdminAccess = isSuperAdmin || isAdmin;
 
-  if (isNavigating) return <NavigationLoader message="Loading..." />;
+  // --- NEW: Block rendering until data is ready to prevent UI flashing ---
+  if (isInitialLoad) return <NavigationLoader message="Syncing Dashboard..." />;
+  
+  // Show Loader if navigating away
+  if (isNavigating) return <NavigationLoader message="Routing..." />;
 
   return (
-    <div className="flex flex-col min-h-screen w-full bg-gray-50 dark:bg-gray-950 transition-colors duration-300 font-outfit">
+    <div className="flex flex-col min-h-screen w-full bg-gray-50 dark:bg-gray-950 transition-colors duration-300 font-outfit animate-in fade-in duration-500">
       {/* --- Header --- */}
       <header className="px-6 pt-8 pb-4 sticky top-0 bg-gray-50/90 dark:bg-gray-950/90 backdrop-blur-md z-10 border-b border-gray-100 dark:border-gray-800/50">
         <div className="flex justify-between items-start">

@@ -189,8 +189,12 @@ export async function renewVerificationCycle(id: string) {
     if (!person) return { success: false, message: "User not found" };
 
     const now = new Date();
-    const newExpiry = new Date();
-    newExpiry.setFullYear(now.getFullYear() + 3);
+    const newExpiry = new Date(now); // Copy the current date
+    
+    // Add 3 Gregorian years
+    newExpiry.setFullYear(newExpiry.getFullYear() + 3);
+    // NEW: Subtract 45 days for the Lunar Calendar shift (Ramadan offset)
+    newExpiry.setDate(newExpiry.getDate() - 45);
 
     person.verificationCycle = {
       startDate: now,
@@ -207,7 +211,7 @@ export async function renewVerificationCycle(id: string) {
         await logAction(
           "RE_VERIFY",
           person.fullName,
-          `3-Year cycle renewed. New expiry: ${newExpiry.getFullYear()}`
+          `3-Year cycle renewed (Lunar Adjusted). New expiry: ${newExpiry.toLocaleDateString("en-IN")}`
         );
     } catch(e) {
         console.error("Logger Failed for RE_VERIFY:", e);
@@ -216,7 +220,7 @@ export async function renewVerificationCycle(id: string) {
     revalidatePath("/distribution/check-in");
     revalidatePath(`/beneficiaries/${id}`);
 
-    return { success: true, message: "Cycle renewed for 3 more years!" };
+    return { success: true, message: "Cycle renewed safely for 3 more Ramadans!" };
   } catch (error: any) {
     return { success: false, message: error.message };
   }

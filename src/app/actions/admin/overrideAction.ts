@@ -31,8 +31,19 @@ export async function overrideField(id: string, fieldPath: string, newValue: any
     const person = await Beneficiary.findById(id);
     if (!person) return { success: false, message: "Beneficiary not found" };
 
-    // Create the update object. Bracket notation allows updating nested fields like 'todayStatus.tokenNumber'
-    const updateObj = { [fieldPath]: newValue };
+    // Create the update object
+    const updateObj: any = { [fieldPath]: newValue };
+
+    // --- NEW: AUTO-CALCULATE END DATE (WITH LUNAR ADJUSTMENT) ---
+    if (fieldPath === "verificationCycle.startDate" && newValue) {
+      const startDate = new Date(newValue);
+      const endDate = new Date(startDate);
+      
+      endDate.setFullYear(endDate.getFullYear() + 3);
+      endDate.setDate(endDate.getDate() - 45); // Subtract 45 days for Hijri calendar shift
+      
+      updateObj["verificationCycle.endDate"] = endDate;
+    }
 
     // $set forces the update, runValidators: false allows bypassing standard rules for Super Admins
     await Beneficiary.findByIdAndUpdate(
@@ -41,11 +52,12 @@ export async function overrideField(id: string, fieldPath: string, newValue: any
       { new: true, runValidators: false }
     );
 
-    await logAction(
-      "SUPER_ADMIN_OVERRIDE", 
-      person.fullName, 
-      `Force updated field [${fieldPath}] to [${newValue}]`
-    );
+    // Dynamic log message based on if we auto-calculated the cycle
+    const logMsg = fieldPath === "verificationCycle.startDate" 
+      ? `Force updated Cycle Start to [${newValue}] and auto-set End Date to [${updateObj["verificationCycle.endDate"].toISOString().split('T')[0]}]`
+      : `Force updated field [${fieldPath}] to [${newValue}]`;
+
+    await logAction("SUPER_ADMIN_OVERRIDE", person.fullName, logMsg);
 
     // Refresh everything
     revalidatePath("/");
