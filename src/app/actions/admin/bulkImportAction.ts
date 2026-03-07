@@ -18,15 +18,19 @@ export async function bulkImportBeneficiaries(data: any[], fileName: string) {
 
     for (const row of data) {
       try {
+        // SKIPPED: Missing Aadhaar
         if (!row.aadharNumber) {
           skipCount++;
+          errors.push(`Row ${rowNumber} | Name: ${row.name || 'Unknown'} => SKIPPED: Missing Aadhaar Number`);
           rowNumber++;
           continue;
         }
 
+        // SKIPPED: Duplicate Aadhaar (Already in DB)
         const exists = await Beneficiary.findOne({ aadharNumber: String(row.aadharNumber) });
         if (exists) {
           skipCount++;
+          errors.push(`Row ${rowNumber} | Name: ${row.name || 'Unknown'} | Aadhaar: ${row.aadharNumber} => SKIPPED: Duplicate. This Aadhaar already exists in the system.`);
           rowNumber++;
           continue;
         }
@@ -48,6 +52,7 @@ export async function bulkImportBeneficiaries(data: any[], fileName: string) {
           registerDateManual: manualDate,
           currentPincode: extractedPincode,
           aadharPincode: extractedPincode,
+          comments:row.remarks || "",
           status: "ACTIVE",
           isException: true, 
           verificationCycle: {
@@ -58,8 +63,8 @@ export async function bulkImportBeneficiaries(data: any[], fileName: string) {
 
         successCount++;
       } catch (e: any) {
-        // Highly detailed error push for the text file log
-        errors.push(`Row ${rowNumber} | Name: ${row.name || 'Unknown'} | Aadhaar: ${row.aadharNumber || 'N/A'} => ${e.message}`);
+        // HARD ERROR: Database validation failed
+        errors.push(`Row ${rowNumber} | Name: ${row.name || 'Unknown'} | Aadhaar: ${row.aadharNumber || 'N/A'} => ERROR: ${e.message}`);
       }
       rowNumber++;
     }

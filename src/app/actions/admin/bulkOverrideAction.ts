@@ -47,8 +47,7 @@ export async function executeBulkOverride(
   try {
     let query: any = {};
     
-    // If they clicked "Select All", we target everyone matching the filter.
-    // Otherwise, we only target the specific checkboxes they clicked.
+    // Determine Targets
     if (selectAll) {
       query[filterField] = filterValue;
     } else {
@@ -56,24 +55,56 @@ export async function executeBulkOverride(
       query = { _id: { $in: targetIds } };
     }
 
-    const updateObj: any = { [updateField]: updateValue };
+    let updateOperation: any = {};
 
-    // --- AUTO-CALCULATE END DATE (WITH LUNAR ADJUSTMENT) ---
-    if (updateField === "verificationCycle.startDate" && updateValue) {
-      const startDate = new Date(updateValue);
-      const endDate = new Date(startDate);
-      endDate.setFullYear(endDate.getFullYear() + 3);
-      endDate.setDate(endDate.getDate() - 45); // Lunar adjustment
-      updateObj["verificationCycle.endDate"] = endDate;
+    // ============================================================
+    // SPECIAL MACRO: Safely inject a new year into the History Arrays
+    // ============================================================
+    if (updateField === "INJECT_HISTORY_YEAR") {
+      const yearNum = Number(updateValue);
+      if (!yearNum || isNaN(yearNum)) return { success: false, message: "Invalid year provided." };
+      
+      // Safety: Only update records that DO NOT already have this year
+      query.distributedYears = { $ne: yearNum };
+
+      updateOperation = {
+        $addToSet: { distributedYears: yearNum },
+        $push: { 
+          distributionHistory: {
+            date: new Date(yearNum, 2, 15), // Timestamp of when the admin injected it
+            year: yearNum,
+            status: "COLLECTED"
+          }
+        }
+      };
+    } 
+    // ============================================================
+    // STANDARD FIELD OVERRIDE
+    // ============================================================
+    else {
+      const updateObj: any = { [updateField]: updateValue };
+
+      // --- AUTO-CALCULATE END DATE (WITH LUNAR ADJUSTMENT) ---
+      if (updateField === "verificationCycle.startDate" && updateValue) {
+        const startDate = new Date(updateValue);
+        const endDate = new Date(startDate);
+        endDate.setFullYear(endDate.getFullYear() + 3);
+        endDate.setDate(endDate.getDate() - 45); // Lunar adjustment
+        updateObj["verificationCycle.endDate"] = endDate;
+      }
+
+      updateOperation = { $set: updateObj };
     }
 
     // Run the massive update
-    const result = await Beneficiary.updateMany(query, { $set: updateObj }, { runValidators: false });
+    const result = await Beneficiary.updateMany(query, updateOperation, { runValidators: false });
 
     await logAction(
       "BULK_OVERRIDE",
       "SUPER_ADMIN",
-      `Bulk updated ${result.modifiedCount} records. Set [${updateField}] to [${updateValue}]`
+      updateField === "INJECT_HISTORY_YEAR" 
+        ? `Bulk injected Ramzan ${updateValue} history into ${result.modifiedCount} records.`
+        : `Bulk updated ${result.modifiedCount} records. Set [${updateField}] to [${updateValue}]`
     );
 
     revalidatePath("/");

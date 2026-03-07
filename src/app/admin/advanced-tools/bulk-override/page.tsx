@@ -75,6 +75,17 @@ const STATIC_GROUPS = [
       { label: "Queue Timestamp", key: "todayStatus.date", type: "date" },
       { label: "Queue Year", key: "todayStatus.year", type: "number" },
     ]
+  },
+  {
+    title: "7. Advanced Data Macros", color: "text-pink-600", bg: "bg-pink-50 dark:bg-pink-900/10",
+    fields: [
+      { 
+        label: "Inject Past Collection Year", 
+        key: "INJECT_HISTORY_YEAR", 
+        type: "select", 
+        options: ["2026", "2025", "2024", "2023", "2022", "2021", "2020"] 
+      },
+    ]
   }
 ];
 
@@ -89,7 +100,7 @@ const COMMON_FILTERS = [
   { label: "Husband/Marital Status", key: "husbandStatus" },
   { label: "Housing Type", key: "housingType" },
   { label: "Queue Status Today", key: "todayStatus.status" },
-  { label: "Distributed Year (Contains)", key: "distributedYears" }, // Finds people who collected in X year
+  { label: "Distributed Year (Contains)", key: "distributedYears" }, 
   { label: "Is Exception Case", key: "isException", isBool: true },
   { label: "Is Main Earning", key: "isEarning", isBool: true },
   { label: "Is Fully Verified", key: "verificationCycle.isFullyVerified", isBool: true },
@@ -132,7 +143,12 @@ export default function BulkOverridePage() {
       setLoadingOptions(true);
       const res = await getDistinctOptions(filterField);
       if (res.success && Array.isArray(res.data)) {
-        setFilterOptions(res.data as string[]);
+        // FIXED: Filter out zeroes from the distributedYears array
+        let rawOptions = res.data;
+        if (filterField === "distributedYears") {
+            rawOptions = rawOptions.filter(val => val !== 0 && val !== "0");
+        }
+        setFilterOptions(rawOptions as string[]);
       }
       setFilterValue("");
       setLoadingOptions(false);
@@ -179,10 +195,16 @@ export default function BulkOverridePage() {
     setIsSaving(true);
     
     let finalValue = updateConfig.newValue;
-    if (finalValue === "null" || finalValue === "") finalValue = null;
-    else if (updateConfig.type === "boolean") finalValue = finalValue === "true" || finalValue === true;
-    else if (updateConfig.type === "number") finalValue = Number(finalValue);
-    else if (updateConfig.type === "date" && finalValue) finalValue = new Date(finalValue);
+    
+    // Convert special macro to Number before sending
+    if (updateConfig.key === "INJECT_HISTORY_YEAR") {
+        finalValue = Number(finalValue);
+    } else {
+        if (finalValue === "null" || finalValue === "") finalValue = null;
+        else if (updateConfig.type === "boolean") finalValue = finalValue === "true" || finalValue === true;
+        else if (updateConfig.type === "number") finalValue = Number(finalValue);
+        else if (updateConfig.type === "date" && finalValue) finalValue = new Date(finalValue);
+    }
 
     let fVal: any = filterValue;
     if (fVal === "true") fVal = true;

@@ -45,7 +45,8 @@ export default function ExcelImportPage() {
           address: row["Address"],
           area: row["Area"],
           referredBy: row["Reffered by"] || row["Referred by"],
-          aidDate: row["Aid Date"] 
+          aidDate: row["Aid Date"],
+          remark:row["Remarks"],
         }));
 
         setPendingData(mapped);
