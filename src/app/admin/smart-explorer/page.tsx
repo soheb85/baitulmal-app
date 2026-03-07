@@ -76,63 +76,63 @@ const [metadata, setMetadata] = useState<{
     if (!selectedUser) return null;
     return (
       <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col justify-end p-4 animate-in fade-in">
-        <div className="bg-white dark:bg-gray-900 w-full max-w-md mx-auto rounded-[2.5rem] p-6 shadow-2xl animate-in slide-in-from-bottom-10 mb-4 border border-gray-100 dark:border-gray-800">
-          <div className="flex justify-between items-start mb-6">
-            <div>
+        <div className="bg-white dark:bg-gray-900 w-full max-w-md mx-auto rounded-[2.5rem] p-6 shadow-2xl animate-in slide-in-from-bottom-10 mb-4 border border-gray-100 dark:border-gray-800 overflow-hidden">
+          
+          <div className="flex justify-between items-start mb-6 gap-3">
+            <div className="min-w-0 flex-1">
               <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-1">Select Action</p>
-              <h3 className="text-xl font-black text-gray-900 dark:text-white leading-tight">{selectedUser.fullName}</h3>
-              <p className="text-xs font-bold text-gray-500 mt-1">Mob: {selectedUser.mobileNumber} | Area: {selectedUser.area || selectedUser.currentPincode}</p>
+              <h3 className="text-xl font-black text-gray-900 dark:text-white leading-tight break-words">{selectedUser.fullName}</h3>
+              <p className="text-xs font-bold text-gray-500 mt-1 truncate">Mob: {selectedUser.mobileNumber} | Area: {selectedUser.area || selectedUser.currentPincode}</p>
             </div>
-            <button onClick={() => setSelectedUser(null)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full active:scale-90 transition-transform">
+            <button onClick={() => setSelectedUser(null)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full active:scale-90 transition-transform shrink-0">
               <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
             </button>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 w-full">
             {/* Standard Profile View */}
             <button 
               onClick={() => handleBack(`/beneficiaries/${selectedUser._id}`)}
-              className="w-full flex items-center p-4 bg-purple-50 dark:bg-purple-900/10 rounded-2xl border border-purple-100 dark:border-purple-900/30 active:scale-95 transition-transform text-left"
+              className="w-full flex items-center p-4 bg-purple-50 dark:bg-purple-900/10 rounded-2xl border border-purple-100 dark:border-purple-900/30 active:scale-95 transition-transform text-left min-w-0"
             >
-              <div className="bg-purple-100 dark:bg-purple-900/50 p-2.5 rounded-xl mr-4"><UserCog className="w-5 h-5 text-purple-600" /></div>
-              <div className="flex-1">
-                <p className="font-black text-gray-900 dark:text-white text-sm">View Master Profile</p>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Edit all details</p>
+              <div className="bg-purple-100 dark:bg-purple-900/50 p-2.5 rounded-xl mr-4 shrink-0"><UserCog className="w-5 h-5 text-purple-600" /></div>
+              <div className="flex-1 min-w-0 pr-2">
+                <p className="font-black text-gray-900 dark:text-white text-sm truncate">View Master Profile</p>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5 truncate">Edit all details</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-purple-300" />
+              <ChevronRight className="w-4 h-4 text-purple-300 shrink-0" />
             </button>
 
-            {/* Route to Verify with Mobile Number Pre-filled */}
+            {/* Route to Verify with Aadhaar Number */}
             <button 
-              onClick={() => router.push(`/verify?search=${selectedUser.aadharNumber || selectedUser.mobileNumber}`)}
-              className="w-full flex items-center p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/30 active:scale-95 transition-transform text-left"
+              onClick={() => router.push(`/verify?search=${selectedUser.aadharNumber}`)}
+              className="w-full flex items-center p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/30 active:scale-95 transition-transform text-left min-w-0"
             >
-              <div className="bg-blue-100 dark:bg-blue-900/50 p-2.5 rounded-xl mr-4"><Search className="w-5 h-5 text-blue-600" /></div>
-              <div className="flex-1">
-                <p className="font-black text-gray-900 dark:text-white text-sm">Verify Details</p>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Public Verification Scanner</p>
+              <div className="bg-blue-100 dark:bg-blue-900/50 p-2.5 rounded-xl mr-4 shrink-0"><Search className="w-5 h-5 text-blue-600" /></div>
+              <div className="flex-1 min-w-0 pr-2">
+                <p className="font-black text-gray-900 dark:text-white text-sm truncate">Verify Details</p>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5 truncate">Secure Aadhaar Search</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-blue-300" />
+              <ChevronRight className="w-4 h-4 text-blue-300 shrink-0" />
             </button>
 
-            {/* Route to Check-In with Mobile Number Pre-filled */}
+            {/* Route to Check-In with Aadhaar Number */}
             <button 
-              onClick={() => router.push(`/distribution/check-in?search=${selectedUser.aadharNumber || selectedUser.mobileNumber}`)}
-              className="w-full flex items-center p-4 bg-orange-50 dark:bg-orange-900/10 rounded-2xl border border-orange-100 dark:border-orange-900/30 active:scale-95 transition-transform text-left"
+              onClick={() => router.push(`/distribution/check-in?search=${selectedUser.aadharNumber}`)}
+              className="w-full flex items-center p-4 bg-orange-50 dark:bg-orange-900/10 rounded-2xl border border-orange-100 dark:border-orange-900/30 active:scale-95 transition-transform text-left min-w-0"
             >
-              <div className="bg-orange-100 dark:bg-orange-900/50 p-2.5 rounded-xl mr-4"><ShieldCheck className="w-5 h-5 text-orange-600" /></div>
-              <div className="flex-1">
-                <p className="font-black text-gray-900 dark:text-white text-sm">Send to Check-In</p>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Station 1 Queue</p>
+              <div className="bg-orange-100 dark:bg-orange-900/50 p-2.5 rounded-xl mr-4 shrink-0"><ShieldCheck className="w-5 h-5 text-orange-600" /></div>
+              <div className="flex-1 min-w-0 pr-2">
+                <p className="font-black text-gray-900 dark:text-white text-sm truncate">Send to Check-In</p>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5 truncate">Station 1 Queue</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-orange-300" />
+              <ChevronRight className="w-4 h-4 text-orange-300 shrink-0" />
             </button>
           </div>
         </div>
       </div>
     );
   };
-
   return (
     <main className="min-h-screen flex flex-col w-full bg-gray-50 dark:bg-gray-950 font-outfit relative">
       

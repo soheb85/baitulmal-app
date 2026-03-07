@@ -123,7 +123,7 @@ export default function BeneficiaryDetailsView({ data, returnUrl, backLabel }: {
             </div>
 
             {/* Added break-words to handle long names */}
-            <h2 className="text-xl font-black text-gray-900 dark:text-white leading-tight pr-12 break-words">{data.fullName}</h2>
+            <h2 className="text-xl font-black text-gray-900 dark:text-white leading-tight pr-12 break-all max-w-full line-clamp-3">{data.fullName}</h2>
             <p className="text-xs font-mono text-gray-400 font-bold mt-1 tracking-wider">{data.aadharNumber}</p>
 
             <div className="mt-4 space-y-3 w-full">
@@ -297,19 +297,25 @@ export default function BeneficiaryDetailsView({ data, returnUrl, backLabel }: {
         </div>
 
         {/* --- History --- */}
-        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm w-full">
+        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm w-full min-w-0">
             <h3 className="text-xs font-black text-gray-400 uppercase mb-4 tracking-widest flex items-center gap-2">
                 <History className="w-4 h-4 shrink-0" /> History
             </h3>
-            <div className="flex flex-wrap gap-2 mb-4">
+            
+            {/* FIXED: Horizontal Scroller for History Tags */}
+            <div className="flex overflow-x-auto gap-2 mb-4 pb-2 w-full min-w-0" style={{ scrollbarWidth: 'none' }}>
                 {data.distributedYears?.map((year: number) => (
-                    <span key={year} className="px-2.5 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-[10px] font-bold border border-green-200 dark:border-green-800 flex items-center gap-1 shrink-0">
-                        <CalendarDays className="w-3 h-3" /> {year}
+                    <span key={year} className="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-xs font-bold border border-green-200 dark:border-green-800 flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+                        <CalendarDays className="w-3.5 h-3.5" /> {year}
                     </span>
                 ))}
                 {data.distributedYears?.length === 0 && <span className="text-xs text-gray-400 italic">No history yet.</span>}
             </div>
-            <LegacySync id={data._id} currentYears={data.distributedYears} />
+            
+            {/* Wrapper to protect screen width from LegacySync */}
+            <div className="min-w-0 w-full overflow-hidden">
+                <LegacySync id={data._id} currentYears={data.distributedYears} />
+            </div>
         </div>
 
         {/* --- Admin Notes --- */}

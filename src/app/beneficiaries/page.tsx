@@ -116,29 +116,29 @@ export default function BeneficiariesListPage() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 font-outfit">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 font-outfit w-full overflow-hidden">
       {/* HEADER */}
-      <div className="sticky top-0 z-20 bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800">
+      <div className="sticky top-0 z-20 bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 w-full">
         <div className="px-3 pt-4 pb-2 flex items-center gap-3">
           <button
             onClick={() => handleBack("/")}
-            className="p-2 rounded-xl bg-gray-100 dark:bg-gray-900 active:scale-90 transition"
+            className="p-2 rounded-xl bg-gray-100 dark:bg-gray-900 active:scale-90 transition shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
 
-          <div>
-            <h1 className="text-xl font-black text-gray-900 dark:text-white">
+          <div className="min-w-0">
+            <h1 className="text-xl font-black text-gray-900 dark:text-white truncate">
               Beneficiaries
             </h1>
-            <p className="text-xs text-gray-400">Manage registered families</p>
+            <p className="text-xs text-gray-400 truncate">Manage registered families</p>
           </div>
         </div>
 
         {/* SEARCH */}
         <div className="px-3 pb-3">
           <div className="relative">
-            <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 shrink-0" />
 
             <input
               type="text"
@@ -151,12 +151,12 @@ export default function BeneficiariesListPage() {
         </div>
 
         {/* FILTER */}
-        <div className="px-3 pb-4 flex gap-2 overflow-x-auto">
+        <div className="px-3 pb-4 flex gap-2 overflow-x-auto w-full" style={{ scrollbarWidth: 'none' }}>
           {["ALL", "ACTIVE", "BLACKLISTED"].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-full text-xs font-bold border transition
+              className={`px-4 py-2 rounded-full text-xs font-bold border transition shrink-0
               
               ${
                 filter === f
@@ -171,45 +171,45 @@ export default function BeneficiariesListPage() {
       </div>
 
       {/* STATS */}
-      <div className="grid grid-cols-4 gap-2 px-3 py-3">
-        <div className="bg-white dark:bg-gray-900 rounded-xl p-3 text-center border">
-          <p className="text-xs text-gray-400">Total</p>
-          <p className="font-bold text-lg">{total}</p>
+      <div className="grid grid-cols-4 gap-2 px-3 py-3 w-full">
+        <div className="bg-white dark:bg-gray-900 rounded-xl p-3 text-center border min-w-0">
+          <p className="text-xs text-gray-400 truncate">Total</p>
+          <p className="font-bold text-lg truncate">{total}</p>
         </div>
 
-        <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 text-center border">
-          <p className="text-xs text-green-500">Active</p>
-          <p className="font-bold text-lg">{active}</p>
+        <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 text-center border min-w-0">
+          <p className="text-xs text-green-500 truncate">Active</p>
+          <p className="font-bold text-lg truncate">{active}</p>
         </div>
 
-        <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 text-center border">
-          <p className="text-xs text-red-500">Blocked</p>
-          <p className="font-bold text-lg">{blocked}</p>
+        <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 text-center border min-w-0">
+          <p className="text-xs text-red-500 truncate">Blocked</p>
+          <p className="font-bold text-lg truncate">{blocked}</p>
         </div>
 
-        <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3 text-center border">
-          <p className="text-xs text-purple-500">In Queue</p>
-          <p className="font-bold text-lg">{inQueue}</p>
+        <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3 text-center border min-w-0">
+          <p className="text-xs text-purple-500 truncate">In Queue</p>
+          <p className="font-bold text-lg truncate">{inQueue}</p>
         </div>
       </div>
 
       {/* LIST */}
-      <div className="px-2 space-y-3 pb-10">
+      <div className="px-2 space-y-3 pb-10 w-full max-w-full">
         {list.map((item) => {
           const token = item.todayStatus?.tokenNumber;
           const queueDate = item.todayStatus?.queueDate;
-          const status = item.todayStatus?.status; // Check the status
+          const status = item.todayStatus?.status; 
           const isToday = queueDate === today;
 
           return (
             <div
               key={item._id}
               onClick={() => handleBack(`/beneficiaries/${item._id}`)}
-              className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border flex items-center gap-3"
+              className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border flex items-center gap-3 w-full"
             >
               {/* AVATAR */}
               <div
-                className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black
+                className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black shrink-0
                 ${
                   item.status === "ACTIVE"
                     ? "bg-green-100 text-green-700"
@@ -220,21 +220,21 @@ export default function BeneficiariesListPage() {
               </div>
 
               {/* INFO */}
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-gray-900 dark:text-white">
+              <div className="flex-1 min-w-0 overflow-hidden">
+                {/* TRUNCATE ADDED HERE TO PREVENT NAME STRETCHING */}
+                <h3 className="font-bold text-gray-900 dark:text-white truncate">
                   {item.fullName}
                 </h3>
 
                 {token && status && (
                   <div className="mt-1">
-                    {/* CONDITION ADDED HERE */}
                     {status === "COLLECTED" ? (
-                      <span className="text-xs font-bold px-2 py-1 rounded-lg bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                      <span className="text-xs font-bold px-2 py-1 rounded-lg bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 inline-block truncate max-w-full">
                         Ration Collected
                       </span>
                     ) : (
                       <span
-                        className={`text-xs font-bold px-2 py-1 rounded-lg
+                        className={`text-xs font-bold px-2 py-1 rounded-lg inline-block truncate max-w-full
                         ${
                           isToday
                             ? "bg-purple-600 text-white"
@@ -247,18 +247,18 @@ export default function BeneficiariesListPage() {
                   </div>
                 )}
 
-                <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                  <Phone className="w-3.5 h-3.5" />
-                  {item.mobileNumber}
+                <div className="flex items-center gap-2 text-sm text-gray-500 mt-1 min-w-0">
+                  <Phone className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{item.mobileNumber}</span>
                 </div>
 
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <CreditCard className="w-3.5 h-3.5" />
-                  {formatAadhaar(item.aadharNumber)}
+                <div className="flex items-center gap-2 text-sm text-gray-500 min-w-0">
+                  <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{formatAadhaar(item.aadharNumber)}</span>
                 </div>
               </div>
 
-              <ChevronRight className="w-5 h-5 text-gray-400" />
+              <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />
             </div>
           );
         })}

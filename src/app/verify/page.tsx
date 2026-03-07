@@ -217,7 +217,7 @@ function VerifyContent() {
             {/* Core Identity Details */}
             <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
               <div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{data.fullName}</h3>
+                <h3 className="text-xl font-black text-gray-900 dark:text-white leading-tight pr-12 break-all max-w-full line-clamp-3">{data.fullName}</h3>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-xs font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-300">{data.aadharNumber}</span>
                   <span className="text-xs font-medium text-blue-600 dark:text-blue-400 flex items-center gap-1"><Phone className="w-3 h-3" /> {data.mobileNumber}</span>

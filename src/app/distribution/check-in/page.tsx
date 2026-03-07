@@ -227,7 +227,7 @@ function CheckInContent() {
         <div className="bg-white dark:bg-gray-900 p-5 rounded-3xl shadow-lg border border-gray-100 dark:border-gray-800 animate-in slide-in-from-bottom-6">
            <div className="flex justify-between items-start mb-6 border-b border-gray-100 dark:border-gray-800 pb-4">
              <div>
-                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight">{data.fullName}</h2>
+                 <h2 className="text-xl font-black text-gray-900 dark:text-white leading-tight pr-12 break-all max-w-full line-clamp-3">{data.fullName}</h2>
                  <div className="flex items-center gap-2 mt-1 text-gray-500 dark:text-gray-400">
                     <span className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded uppercase font-bold">{data.gender}</span>
                     <span className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded uppercase font-bold">{data.husbandStatus}</span>

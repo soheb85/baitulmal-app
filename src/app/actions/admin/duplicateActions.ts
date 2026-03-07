@@ -7,18 +7,86 @@ import { revalidatePath } from "next/cache";
 import { logAction } from "@/lib/logger";
 
 // --- 1. FIND DUPLICATES ---
-export async function scanForDuplicates(type: "MOBILE" | "AADHAAR" | "ADDRESS") {
+export async function scanForDuplicates(type: "MOBILE" | "AADHAAR" | "ADDRESS" | "NAMES") {
   await connectDB();
   
   try {
+    // ==========================================
+    // NEW LOGIC: Cross-Check All Names (In-Memory)
+    // ==========================================
+    if (type === "NAMES") {
+      // Fetch all records with just the necessary fields to save memory
+      const allRecords = await Beneficiary.find({})
+        .select('_id fullName mobileNumber aadharNumber status familyMembersDetail.name familyMembersDetail.relation')
+        .lean();
+
+      // Map to store: Normalized Name -> Set of Record IDs
+      const nameMap = new Map<string, Set<string>>();
+
+      for (const record of allRecords) {
+        // Collect main applicant name + all family member names
+        const namesInRecord = [
+          record.fullName,
+          ...(record.familyMembersDetail?.map((m: any) => m.name) || [])
+        ];
+
+        for (const name of namesInRecord) {
+          if (!name) continue;
+          // Normalize: lowercase, remove extra spaces
+          const normalizedName = name.toString().toLowerCase().replace(/\s+/g, ' ').trim();
+          
+          // Skip extremely short names to avoid false positives (like "ali", "sk")
+          if (normalizedName.length < 4) continue;
+
+          if (!nameMap.has(normalizedName)) {
+            nameMap.set(normalizedName, new Set());
+          }
+          nameMap.get(normalizedName)!.add(record._id.toString());
+        }
+      }
+
+      // Filter down to ONLY names that appear in MORE THAN ONE distinct household
+      const duplicateGroups = [];
+      for (const [name, recordIdsSet] of nameMap.entries()) {
+        if (recordIdsSet.size > 1) {
+          duplicateGroups.push({
+            sharedValue: name,
+            count: recordIdsSet.size,
+            recordIds: Array.from(recordIdsSet)
+          });
+        }
+      }
+
+      // Sort by highest count first
+      duplicateGroups.sort((a, b) => b.count - a.count);
+      // Limit to top 50 to prevent massive browser lag
+      const topGroups = duplicateGroups.slice(0, 50);
+
+      // Fetch the full records for the UI
+      const allDuplicateIds = topGroups.flatMap(g => g.recordIds);
+      const fullRecords = await Beneficiary.find({ _id: { $in: allDuplicateIds } }).lean();
+
+      // Format data for frontend
+      const formattedData = topGroups.map(group => {
+        return {
+          sharedValue: group.sharedValue,
+          count: group.count,
+          profiles: fullRecords.filter(r => group.recordIds.includes(r._id.toString()))
+        };
+      });
+
+      return { success: true, data: JSON.parse(JSON.stringify(formattedData)) };
+    }
+
+    // ==========================================
+    // ORIGINAL LOGIC: Aggregation for Standard Fields
+    // ==========================================
     const pipeline: any[] = [];
 
-    // Step 1: Safely format the grouping field to prevent crashes on null values
     if (type === "ADDRESS") {
       pipeline.push({
         $project: {
-          _id: 1, // Keep the document ID
-          // Convert address to lowercase, trim spaces, and handle missing fields safely
+          _id: 1,
           groupKey: { $toLower: { $trim: { input: { $ifNull: ["$currentAddress", ""] } } } }
         }
       });
@@ -31,7 +99,6 @@ export async function scanForDuplicates(type: "MOBILE" | "AADHAAR" | "ADDRESS") 
       });
     }
 
-    // Step 2: Group by our formatted key
     pipeline.push({
       $group: {
         _id: "$groupKey",
@@ -40,8 +107,6 @@ export async function scanForDuplicates(type: "MOBILE" | "AADHAAR" | "ADDRESS") 
       }
     });
 
-    // Step 3: Match only groups that have more than 1 record AND are not blank/null
-    // Fix applied here: using $nin (Not In) instead of double $ne
     pipeline.push({
       $match: {
         count: { $gt: 1 },
@@ -49,7 +114,6 @@ export async function scanForDuplicates(type: "MOBILE" | "AADHAAR" | "ADDRESS") 
       }
     });
 
-    // Step 4: Sort by highest duplicate count first, limit to 100 for performance
     pipeline.push({ $sort: { count: -1 } });
     pipeline.push({ $limit: 100 });
 
@@ -57,11 +121,9 @@ export async function scanForDuplicates(type: "MOBILE" | "AADHAAR" | "ADDRESS") 
 
     if (duplicateGroups.length === 0) return { success: true, data: [] };
 
-    // Fetch the actual full documents for these duplicates
     const allDuplicateIds = duplicateGroups.flatMap(g => g.records);
     const fullRecords = await Beneficiary.find({ _id: { $in: allDuplicateIds } }).lean();
 
-    // Format data: Map the full records back to their duplicate group
     const formattedData = duplicateGroups.map(group => {
       return {
         sharedValue: group._id,
