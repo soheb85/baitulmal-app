@@ -6,7 +6,8 @@ import { registerBeneficiary } from "@/app/actions/registerBeneficiary";
 import { updateBeneficiary } from "@/app/actions/updateBeneficiary";
 import { checkAadharDuplicate } from "@/app/actions/checkAadhar";
 import { useBackNavigation } from "@/hooks/useBackNavigation"; 
-import NavigationLoader from "@/components/ui/NavigationLoader"; 
+import NavigationLoader from "@/components/ui/NavigationLoader";
+import AadhaarQRScanner from "@/components/AadhaarQRScanner"; 
 import {
   Loader2,
   CheckCircle,
@@ -21,7 +22,8 @@ import {
   Users,
   X, 
   GraduationCap, 
-  Briefcase 
+  Briefcase ,
+  QrCode
 } from "lucide-react";
 
 // --- Types ---
@@ -141,6 +143,98 @@ export default function RegisterForm({
     classStandard: "",
     memberNotes: ""
   });
+
+  // Scanner State
+  const [scanOpen, setScanOpen] = useState(false);
+
+  // The Smart Handler (Talks to your Python API)
+  const handleAadhaarScan = async (decodedText: string) => {
+    try {
+      // 1. Check if it is the new "Secure QR" (Massive string of numbers)
+      if (/^\d+$/.test(decodedText) && decodedText.length > 500) {
+         
+         setMessage({ type: "success", text: "Secure QR Detected. Decrypting data..." });
+         setScanOpen(false);
+         
+         // Call the Python API you created
+         const response = await fetch('/api/decode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ qr_data: decodedText })
+         });
+         
+         const res = await response.json();
+         
+         if (res.success && res.data) {
+            const secureData = res.data;
+            
+            const fullAddress = [
+                secureData.house, secureData.street, secureData.landmark, 
+                secureData.location, secureData.district, secureData.state
+            ].filter(Boolean).join(", ");
+
+            setFormData((prev) => ({
+              ...prev,
+              fullName: secureData.name || prev.fullName,
+              // Only 4 digits exist! User MUST type the rest.
+              aadharNumber: `XXXXXXXX${secureData.adhaar_last_4_digit || ""}`, 
+              gender: secureData.gender === "M" ? "MALE" : secureData.gender === "F" ? "FEMALE" : prev.gender,
+              currentAddress: fullAddress || prev.currentAddress,
+              aadharPincode: secureData.pincode || prev.aadharPincode,
+            }));
+
+            alert("Data decrypted! \n\nNOTE: UIDAI hides the first 8 digits of the Aadhaar number in Secure QRs. Please type the full 12 digits manually.");
+            setMessage(null);
+         } else {
+             alert("Failed to decrypt Secure QR: " + res.error);
+             setMessage(null);
+         }
+         return;
+      }
+
+      // 2. Check if it's the Standard XML format (Old Cards)
+      if (decodedText.includes("<?xml") || decodedText.includes("<PrintLetterBarcodeData")) {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(decodedText, "text/xml");
+        const dataNode = xmlDoc.getElementsByTagName("PrintLetterBarcodeData")[0];
+        
+        if (dataNode) {
+          const uid = dataNode.getAttribute("uid") || "";
+          const name = dataNode.getAttribute("name") || "";
+          const gender = dataNode.getAttribute("gender") || ""; 
+          const pincode = dataNode.getAttribute("pc") || "";
+          
+          const house = dataNode.getAttribute("house") || "";
+          const street = dataNode.getAttribute("street") || "";
+          const loc = dataNode.getAttribute("loc") || "";
+          const dist = dataNode.getAttribute("dist") || "";
+          const state = dataNode.getAttribute("state") || "";
+          const fullAddress = [house, street, loc, dist, state].filter(Boolean).join(", ");
+
+          setFormData((prev) => ({
+            ...prev,
+            fullName: name || prev.fullName,
+            aadharNumber: uid || prev.aadharNumber,
+            gender: gender === "M" ? "MALE" : gender === "F" ? "FEMALE" : prev.gender,
+            currentAddress: fullAddress || prev.currentAddress,
+            aadharPincode: pincode || prev.aadharPincode,
+          }));
+          
+          setMessage({ type: "success", text: "Aadhaar Scanned Successfully!" });
+          setScanOpen(false);
+          return;
+        }
+      } 
+      
+      alert("Unrecognized Aadhaar format. Please ensure you are scanning a valid Indian Aadhaar card.");
+      setScanOpen(false);
+
+    } catch (error) {
+      console.error("Failed to parse QR", error);
+      alert("Failed to read QR code data.");
+      setScanOpen(false);
+    }
+  };
 
   // --- Handlers ---
   const handleChange = (
@@ -281,18 +375,30 @@ export default function RegisterForm({
       
       {/* 1. Identity Section */}
       <section className="bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-2xl">
-            <Fingerprint className="w-6 h-6 text-green-600" />
+        
+        {/* === UPDATED HEADER WITH SCAN BUTTON === */}
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-2xl">
+              <Fingerprint className="w-6 h-6 text-green-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-gray-900 dark:text-white leading-none">
+                Identity
+              </h3>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                Verification
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-xl font-black text-gray-900 dark:text-white leading-none">
-              Identity Verification
-            </h3>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-              Personal Details
-            </p>
-          </div>
+          
+          <button
+            type="button"
+            onClick={() => setScanOpen(true)}
+            className="flex items-center gap-2 bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-700 dark:text-green-400 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors active:scale-95"
+          >
+            <QrCode className="w-4 h-4" /> Scan QR
+          </button>
         </div>
 
         <div className="space-y-6">
@@ -953,6 +1059,14 @@ export default function RegisterForm({
           </div>
         )}
       </div>
+
+      {/* === RENDER SCANNER MODAL === */}
+      {scanOpen && (
+        <AadhaarQRScanner
+          onScan={handleAadhaarScan}
+          onClose={() => setScanOpen(false)}
+        />
+      )}
     </form>
   );
 }

@@ -251,7 +251,7 @@ export default function SmartExplorerPage() {
                     >
                       <Fingerprint className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                       <span className="text-[11px] font-mono font-bold text-indigo-700 dark:text-indigo-300">
-                        {user.aadharNumber.aadharNumber
+                        {user.aadharNumber
                         ?.toString()
                         .replace(/(\d{4})(?=\d)/g, "$1 ") || "N/A"}
                       </span>
