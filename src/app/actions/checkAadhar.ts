@@ -9,15 +9,26 @@ export async function checkAadharDuplicate(aadhar: string) {
     const existing = await Beneficiary.findOne({ aadharNumber: aadhar }).lean();
     
     if (existing) {
-      // Safely extract the year or provide a fallback if the cycle isn't set yet
+      console.log("Existing Beneficiary Found:", existing);
+      // 1. Calculate Expiry Year
       const expiryDate = existing.verificationCycle?.endDate;
       const expiryYear = expiryDate ? new Date(expiryDate).getFullYear() : (new Date().getFullYear() + 3);
 
+      // 2. Calculate Ration Count from your distributionHistory array
+      const rationCount = Array.isArray(existing.distributionHistory) 
+        ? existing.distributionHistory.length 
+        : 0;
+
+        
+
+      // 3. Return the exact fields matching your schema
       return { 
         exists: true, 
         message: `Already registered. Verified until Ramzan ${expiryYear}`,
         name: existing.fullName,
-        mobileNumber: existing.mobileNumber
+        mobileNumber: existing.mobileNumber.toString() || "N/A",
+        status: existing.status,
+        rationCount: rationCount
       };
     }
     

@@ -7,7 +7,6 @@ import { updateBeneficiary } from "@/app/actions/updateBeneficiary";
 import { checkAadharDuplicate } from "@/app/actions/checkAadhar";
 import { useBackNavigation } from "@/hooks/useBackNavigation"; 
 import NavigationLoader from "@/components/ui/NavigationLoader";
-import AadhaarQRScanner from "@/components/AadhaarQRScanner"; 
 import {
   Loader2,
   CheckCircle,
@@ -84,6 +83,7 @@ export default function RegisterForm({
     message: string;
     name?: string;
     mobileNumber?: string;
+    rationCount?: number;
   } | null>(null);
 
   // --- Form State ---
@@ -144,97 +144,6 @@ export default function RegisterForm({
     memberNotes: ""
   });
 
-  // Scanner State
-  const [scanOpen, setScanOpen] = useState(false);
-
-  // The Smart Handler (Talks to your Python API)
-  const handleAadhaarScan = async (decodedText: string) => {
-    try {
-      // 1. Check if it is the new "Secure QR" (Massive string of numbers)
-      if (/^\d+$/.test(decodedText) && decodedText.length > 500) {
-         
-         setMessage({ type: "success", text: "Secure QR Detected. Decrypting data..." });
-         setScanOpen(false);
-         
-         // Call the Python API you created
-         const response = await fetch('/api/decode', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ qr_data: decodedText })
-         });
-         
-         const res = await response.json();
-         
-         if (res.success && res.data) {
-            const secureData = res.data;
-            
-            const fullAddress = [
-                secureData.house, secureData.street, secureData.landmark, 
-                secureData.location, secureData.district, secureData.state
-            ].filter(Boolean).join(", ");
-
-            setFormData((prev) => ({
-              ...prev,
-              fullName: secureData.name || prev.fullName,
-              // Only 4 digits exist! User MUST type the rest.
-              aadharNumber: `XXXXXXXX${secureData.adhaar_last_4_digit || ""}`, 
-              gender: secureData.gender === "M" ? "MALE" : secureData.gender === "F" ? "FEMALE" : prev.gender,
-              currentAddress: fullAddress || prev.currentAddress,
-              aadharPincode: secureData.pincode || prev.aadharPincode,
-            }));
-
-            alert("Data decrypted! \n\nNOTE: UIDAI hides the first 8 digits of the Aadhaar number in Secure QRs. Please type the full 12 digits manually.");
-            setMessage(null);
-         } else {
-             alert("Failed to decrypt Secure QR: " + res.error);
-             setMessage(null);
-         }
-         return;
-      }
-
-      // 2. Check if it's the Standard XML format (Old Cards)
-      if (decodedText.includes("<?xml") || decodedText.includes("<PrintLetterBarcodeData")) {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(decodedText, "text/xml");
-        const dataNode = xmlDoc.getElementsByTagName("PrintLetterBarcodeData")[0];
-        
-        if (dataNode) {
-          const uid = dataNode.getAttribute("uid") || "";
-          const name = dataNode.getAttribute("name") || "";
-          const gender = dataNode.getAttribute("gender") || ""; 
-          const pincode = dataNode.getAttribute("pc") || "";
-          
-          const house = dataNode.getAttribute("house") || "";
-          const street = dataNode.getAttribute("street") || "";
-          const loc = dataNode.getAttribute("loc") || "";
-          const dist = dataNode.getAttribute("dist") || "";
-          const state = dataNode.getAttribute("state") || "";
-          const fullAddress = [house, street, loc, dist, state].filter(Boolean).join(", ");
-
-          setFormData((prev) => ({
-            ...prev,
-            fullName: name || prev.fullName,
-            aadharNumber: uid || prev.aadharNumber,
-            gender: gender === "M" ? "MALE" : gender === "F" ? "FEMALE" : prev.gender,
-            currentAddress: fullAddress || prev.currentAddress,
-            aadharPincode: pincode || prev.aadharPincode,
-          }));
-          
-          setMessage({ type: "success", text: "Aadhaar Scanned Successfully!" });
-          setScanOpen(false);
-          return;
-        }
-      } 
-      
-      alert("Unrecognized Aadhaar format. Please ensure you are scanning a valid Indian Aadhaar card.");
-      setScanOpen(false);
-
-    } catch (error) {
-      console.error("Failed to parse QR", error);
-      alert("Failed to read QR code data.");
-      setScanOpen(false);
-    }
-  };
 
   // --- Handlers ---
   const handleChange = (
@@ -376,30 +285,19 @@ export default function RegisterForm({
       {/* 1. Identity Section */}
       <section className="bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
         
-        {/* === UPDATED HEADER WITH SCAN BUTTON === */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-2xl">
-              <Fingerprint className="w-6 h-6 text-green-600" />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-gray-900 dark:text-white leading-none">
-                Identity
-              </h3>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                Verification
-              </p>
-            </div>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-2xl">
+            <Fingerprint className="w-6 h-6 text-green-600" />
           </div>
-          
-          <button
-            type="button"
-            onClick={() => setScanOpen(true)}
-            className="flex items-center gap-2 bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-700 dark:text-green-400 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-colors active:scale-95"
-          >
-            <QrCode className="w-4 h-4" /> Scan QR
-          </button>
-        </div>
+          <div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-white leading-none">
+              Identity Verification
+            </h3>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+              Personal Details
+            </p>
+          </div>
+          </div>
 
         <div className="space-y-6">
           <div>
@@ -418,10 +316,11 @@ export default function RegisterForm({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* --- AADHAAR COLUMN --- */}
             <div>
               <div className="flex justify-between items-center mb-1.5 px-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">
-                  Aadhaar (12 Digits)
+                  Aadhaar (12)
                 </label>
                 <span className={`text-[10px] font-black ${formData.aadharNumber.length === 12 ? "text-green-600" : "text-red-500"}`}>
                   {formData.aadharNumber.length} / 12
@@ -436,19 +335,9 @@ export default function RegisterForm({
                 placeholder="0000 0000 0000"
                 className={`w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-2 outline-none transition-all font-mono font-bold text-lg ${formData.aadharNumber.length === 12 && !aadharStatus ? "border-green-100 dark:border-green-900/30" : "border-transparent focus:border-green-500"}`}
               />
-              {aadharStatus?.exists && (
-                <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-2xl flex gap-2 animate-in fade-in zoom-in-95">
-                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-                  <p className="text-[11px] text-red-700 dark:text-red-400 font-bold leading-tight">
-                    Duplicate: Registered as {aadharStatus.name}
-                  </p>
-                  <p className="text-[11px] text-red-700 dark:text-red-400 font-bold leading-tight">
-                    Duplicate: Registered as {aadharStatus.mobileNumber}
-                  </p>
-                </div>
-              )}
             </div>
 
+            {/* --- MOBILE COLUMN --- */}
             <div>
               <div className="flex justify-between items-center mb-1.5 px-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">
@@ -472,6 +361,50 @@ export default function RegisterForm({
               </div>
             </div>
           </div>
+
+          {/* --- ERROR CARD (FULL WIDTH) --- */}
+          {aadharStatus?.exists && (
+            <div className="p-4 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/50 rounded-2xl flex items-start gap-3 animate-in fade-in zoom-in-95 shadow-sm">
+              <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-xl shrink-0 mt-0.5">
+                  <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div className="flex-1 w-full min-w-0">
+                <h4 className="text-sm font-black text-red-700 dark:text-red-400 mb-1">
+                  Aadhaar Already Registered!
+                </h4>
+                
+                {/* Shows the "Verified until Ramzan 2026" message */}
+                <p className="text-xs font-bold text-red-500 dark:text-red-300 mb-3">
+                  {aadharStatus.message}
+                </p>
+                
+                <div className="space-y-2 bg-white/60 dark:bg-gray-900/60 p-3 rounded-xl border border-red-100 dark:border-red-900/30">
+                  <div className="flex justify-between items-center text-xs gap-4">
+                    <span className="text-gray-500 font-bold uppercase tracking-widest shrink-0">Name</span>
+                    <span className="font-black text-gray-900 dark:text-white text-right truncate">
+                      {aadharStatus.name || "Unknown"}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-xs gap-4">
+                    <span className="text-gray-500 font-bold uppercase tracking-widest shrink-0">Mobile</span>
+                    <span className="font-black text-gray-900 dark:text-white text-right">
+                      {aadharStatus.mobileNumber || "N/A"}
+                    </span>
+                  </div>
+
+                  {/* Ration Collection Count Badge */}
+                  <div className="flex justify-between items-center text-xs pt-2 mt-2 border-t border-red-100 dark:border-red-900/30 gap-4">
+                    <span className="text-gray-500 font-bold uppercase tracking-widest shrink-0">Rations Collected</span>
+                    <span className="font-black px-2.5 py-1 rounded-md text-[11px] tracking-widest bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 shadow-sm border border-blue-200 dark:border-blue-800">
+                      {aadharStatus.rationCount ?? 0} TIMES
+                    </span>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -1059,14 +992,6 @@ export default function RegisterForm({
           </div>
         )}
       </div>
-
-      {/* === RENDER SCANNER MODAL === */}
-      {scanOpen && (
-        <AadhaarQRScanner
-          onScan={handleAadhaarScan}
-          onClose={() => setScanOpen(false)}
-        />
-      )}
     </form>
   );
 }
