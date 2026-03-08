@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { 
   searchForBulkDelete, 
   executeBulkDelete, 
@@ -16,7 +16,7 @@ import {
   ListFilter, Skull
 } from "lucide-react";
 
-export default function BulkDeletePage() {
+function BulkDeleteContent() {
   const { isNavigating, handleBack } = useBackNavigation("/admin/advanced-tools");
   
   // Tabs: SEARCH vs WIPE_ALL
@@ -281,5 +281,13 @@ export default function BulkDeletePage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function BulkDeletePage() {
+  return (
+    <Suspense fallback={<NavigationLoader message="Initializing Security Tools..." />}>
+      <BulkDeleteContent />
+    </Suspense>
   );
 }

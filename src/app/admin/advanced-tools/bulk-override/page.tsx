@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { getDistinctOptions, fetchTargets, executeBulkOverride } from "@/app/actions/admin/bulkOverrideAction";
 import { useBackNavigation } from "@/hooks/useBackNavigation";
 import NavigationLoader from "@/components/ui/NavigationLoader";
@@ -106,7 +106,7 @@ const COMMON_FILTERS = [
   { label: "Is Fully Verified", key: "verificationCycle.isFullyVerified", isBool: true },
 ];
 
-export default function BulkOverridePage() {
+function BulkOverridePageContent() {
   const { isNavigating, handleBack } = useBackNavigation("/admin/advanced-tools");
   
   // Filtering State
@@ -444,5 +444,12 @@ export default function BulkOverridePage() {
         </div>
       )}
     </main>
+  );
+}
+export default function Page() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <BulkOverridePageContent />
+    </Suspense>
   );
 }

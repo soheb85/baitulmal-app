@@ -1,45 +1,50 @@
 "use client";
 
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useCallback, useTransition } from "react";
 
 export function useBackNavigation(fallbackRoute: string = "/beneficiaries") {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  
-  // useTransition is essential for preventing the "recursion" feel 
-  // because it coordinates the UI state with the route change.
+
   const [isNavigating, startTransition] = useTransition();
 
-  const handleBack = useCallback((targetRoute?: string) => {
-    startTransition(() => {
-      // SCENARIO 1: Explicit target provided
-      if (targetRoute) {
-        router.push(targetRoute);
-        return;
-      }
+  const handleBack = useCallback(
+    (targetRoute?: string) => {
+      startTransition(() => {
+        const params = new URLSearchParams(window.location.search);
 
-      // SCENARIO 2: We are in Edit Mode (?edit=true)
-      // Goal: Strip the 'edit' param and show the Details View.
-      if (searchParams.get("edit") === "true") {
-        const params = new URLSearchParams(searchParams.toString());
-        params.delete("edit");
-        
-        // Use the current pathname without the edit parameter
-        const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
-        
-        // We use .push here so that 'Details View' becomes the new 'Back' target
-        router.push(newUrl);
-        return;
-      }
+        // 1️⃣ Explicit route override
+        if (targetRoute) {
+          router.push(targetRoute);
+          return;
+        }
 
-      // SCENARIO 3: We are in Details View (No edit param)
-      // Goal: Always go back to the Main List (fallbackRoute).
-      // Do NOT use router.back() here, as it might point back to the Edit page.
-      router.push(fallbackRoute);
-    });
-  }, [router, pathname, searchParams, fallbackRoute]);
+        // 2️⃣ ReturnTo support (VERY useful)
+        const returnTo = params.get("returnTo");
+        if (returnTo) {
+          router.push(returnTo);
+          return;
+        }
+
+        // 3️⃣ Edit mode handling
+        if (params.get("edit") === "true") {
+          params.delete("edit");
+
+          const newUrl = params.toString()
+            ? `${pathname}?${params.toString()}`
+            : pathname;
+
+          router.push(newUrl);
+          return;
+        }
+
+        // 4️⃣ Default fallback
+        router.push(fallbackRoute);
+      });
+    },
+    [router, pathname, fallbackRoute]
+  );
 
   return { isNavigating, handleBack };
 }
