@@ -111,7 +111,7 @@ export default function RegisterForm({
 
     aadharPincode: initialData?.aadharPincode || "",
     currentPincode: initialData?.currentPincode || "400024",
-    isException: initialData?.isException || false,
+    isException: isEditMode ? (initialData?.isException || false) : false,
     problems: initialData?.problems || [],
     comments: initialData?.comments || "",
     referencedBy: initialData?.referencedBy || "",

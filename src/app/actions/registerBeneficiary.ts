@@ -36,13 +36,19 @@ export async function registerBeneficiary(formData: any) {
 
     const manualDate = formData.registerDateManual ? new Date(formData.registerDateManual) : new Date();
 
+    const start = new Date();
+    const expiry = new Date(start);
+    expiry.setFullYear(expiry.getFullYear() + 3);
+    expiry.setDate(expiry.getDate() - 45);
+
     // 3. Create Record with 3-Year Cycle Initialization
     const person = await Beneficiary.create({
       ...formData,
       status: "ACTIVE",
       registerDateManual: manualDate,
       verificationCycle: {
-        startDate: new Date(),
+        startDate: start,
+        endDate: expiry,
         isFullyVerified: true
       },
     });

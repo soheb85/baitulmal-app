@@ -45,7 +45,8 @@ export interface IBeneficiary extends Document {
   currentAddress: string;
   area: string;
   registerDateManual?: Date;
-  isException: boolean; 
+  isException: boolean;
+  createdBy?: string;
 
   // Family Counts 
   sons: number;
@@ -87,6 +88,7 @@ export interface IBeneficiary extends Document {
     year: number;
     status: "CHECKED_IN" | "COLLECTED" | null;
     tokenNumber?: number;
+    tempNote?: string;
   };
 
   createdAt: Date;
@@ -175,6 +177,7 @@ const BeneficiarySchema = new Schema<
     area: { type: String, default: "", trim: true },
     registerDateManual: { type: Date },
     isException: { type: Boolean, default: false },
+    createdBy: { type: String, default: "Admin" },
 
     // --- FAMILY ---
     familyMembersDetail: { type: [FamilyMemberSchema], default: [] },
@@ -228,6 +231,7 @@ const BeneficiarySchema = new Schema<
         default: null,
       },
       tokenNumber: { type: Number, min: 1 },
+      tempNote: { type: String, trim: true },
     },
   },
   { timestamps: true },

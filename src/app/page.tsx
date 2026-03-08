@@ -28,6 +28,7 @@ import { getCycleStats } from "@/app/actions/getCycleStats";
 import { getSession, logoutUser } from "@/app/actions/authActions";
 import { useBackNavigation } from "@/hooks/useBackNavigation";
 import NavigationLoader from "@/components/ui/NavigationLoader";
+import { getPendingUsersCount } from "@/app/actions/userActions"; // Adjust path
 
 export default function DashboardPage() {
   // --- NEW: Track if the page is doing its very first data load
@@ -90,6 +91,20 @@ export default function DashboardPage() {
   const isSuperAdmin = session?.role === "SUPER_ADMIN";
   const isAdmin = session?.role === "ADMIN";
   const hasAdminAccess = isSuperAdmin || isAdmin;
+
+  const [pendingUserCount, setPendingUserCount] = useState(0);
+  // Only fetch the count if the person logged in is actually a Super Admin
+  useEffect(() => {
+    if (isSuperAdmin) {
+      const fetchCount = async () => {
+        const res = await getPendingUsersCount();
+        if (res.success) {
+          setPendingUserCount(res.count);
+        }
+      };
+      fetchCount();
+    }
+  }, [isSuperAdmin]);
 
   // --- NEW: Block rendering until data is ready to prevent UI flashing ---
   if (isInitialLoad) return <NavigationLoader message="Syncing Dashboard..." />;
@@ -264,17 +279,25 @@ export default function DashboardPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               {isSuperAdmin && (
-                <button
-                  onClick={() => handleBack("/admin/users")}
-                  className="flex flex-col p-4 bg-white dark:bg-gray-900 rounded-[2rem] border border-blue-100 dark:border-blue-900/30 shadow-sm active:scale-95 transition-all text-left"
-                >
-                  <div className="bg-blue-50 dark:bg-blue-900/50 p-3 rounded-2xl w-fit mb-3">
-                    <UserCheck className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <h3 className="font-black text-gray-900 dark:text-white text-sm">Users</h3>
-                  <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-tighter">Approvals</p>
-                </button>
-              )}
+  <button
+    onClick={() => handleBack("/admin/users")}
+    // ADDED 'relative' to the class string below to hold the absolute badge
+    className="relative flex flex-col p-4 bg-white dark:bg-gray-900 rounded-[2rem] border border-blue-100 dark:border-blue-900/30 shadow-sm active:scale-95 transition-all text-left"
+  >
+    {/* THE NOTIFICATION BADGE */}
+    {pendingUserCount > 0 && (
+      <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 border-2 border-white dark:border-gray-950 text-[10px] font-black text-white shadow-md animate-in zoom-in">
+        {pendingUserCount > 99 ? "99+" : pendingUserCount}
+      </span>
+    )}
+
+    <div className="bg-blue-50 dark:bg-blue-900/50 p-3 rounded-2xl w-fit mb-3">
+      <UserCheck className="w-6 h-6 text-blue-600" />
+    </div>
+    <h3 className="font-black text-gray-900 dark:text-white text-sm">Users</h3>
+    <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-tighter">Approvals</p>
+  </button>
+)}
 
               <button
                 onClick={() => handleBack("/admin/inventory")}

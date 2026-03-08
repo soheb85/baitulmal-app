@@ -10,7 +10,7 @@ import Inventory from "@/models/Inventory";
 const currentYear = new Date().getFullYear();
 
 // --- ACTION 1: Check-In (Verification Station) ---
-export async function checkInBeneficiary(id: string) {
+export async function checkInBeneficiary(id: string, tempNote?: string) {
   await connectDB();
   const now = new Date();
   
@@ -74,6 +74,7 @@ export async function checkInBeneficiary(id: string) {
       year: currentYear,
       status: "CHECKED_IN",
       tokenNumber: newTokenNumber,
+      tempNote: tempNote,
     };
 
     await person.save();

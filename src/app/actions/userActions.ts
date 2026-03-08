@@ -14,6 +14,18 @@ export async function checkAvailability(type: "username" | "email", value: strin
   return { available: !exists };
 }
 
+export async function getPendingUsersCount() {
+  await connectDB();
+  try {
+    // Replace "PENDING" with whatever exact string you use for unapproved users in your User schema
+    const count = await User.countDocuments({ isApproved: false }); 
+    return { success: true, count };
+  } catch (error) {
+    console.error("Failed to get pending users count:", error);
+    return { success: false, count: 0 };
+  }
+}
+
 // --- 1. Register User (For Volunteers) ---
 export async function registerUser(formData: any) {
   await connectDB();

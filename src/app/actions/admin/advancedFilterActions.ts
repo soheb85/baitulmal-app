@@ -8,7 +8,6 @@ import Beneficiary from "@/models/Beneficiary";
 export async function getFilterMetadata() {
   await connectDB();
   try {
-    // Grab all unique values from the database, filter out blanks/nulls, and sort alphabetically
     const pincodesRaw = await Beneficiary.distinct("currentPincode");
     const areasRaw = await Beneficiary.distinct("area");
     const referencesRaw = await Beneficiary.distinct("referencedBy");
@@ -26,31 +25,72 @@ export async function getFilterMetadata() {
   }
 }
 
-// 2. Fetch Beneficiaries based on applied filters
-export async function fetchFilteredBeneficiaries(filters: {
-  pincode?: string;
-  area?: string;
-  referencedBy?: string;
-  yearCount?: number | null; // null means "All", 0 means "New", 1 means "1 Year", etc.
-}) {
+// 2. Fetch Beneficiaries based on applied filters AND search query
+export async function fetchFilteredBeneficiaries(
+  filters: {
+    pincode?: string;
+    area?: string;
+    referencedBy?: string;
+    yearCount?: number | null; 
+    gender?: string;
+    husbandStatus?: string;
+    isEarning?: string; 
+    housingType?: string;
+    status?: string;
+    // --- NEW FILTERS ---
+    isException?: string;
+    hasProblems?: string;
+    todayStatus?: string;
+    isFullyVerified?: string;
+  },
+  searchQuery?: string
+) {
   await connectDB();
   try {
     const query: any = {};
 
-    // Apply strict matching if a filter is selected
+    // --- DIRECT SEARCH LOGIC ---
+    if (searchQuery && searchQuery.trim() !== "") {
+      const searchStr = searchQuery.trim();
+      query.$or = [
+        { fullName: { $regex: searchStr, $options: "i" } }, 
+        { aadharNumber: searchStr }, 
+        { mobileNumber: searchStr }, 
+      ];
+    }
+
+    // --- FILTER LOGIC ---
     if (filters.pincode) query.currentPincode = filters.pincode;
     if (filters.area) query.area = filters.area;
     if (filters.referencedBy) query.referencedBy = filters.referencedBy;
+    if (filters.gender) query.gender = filters.gender;
+    if (filters.husbandStatus) query.husbandStatus = filters.husbandStatus;
+    if (filters.housingType) query.housingType = filters.housingType;
+    if (filters.status) query.status = filters.status;
+    if (filters.todayStatus) query["todayStatus.status"] = filters.todayStatus;
+    
+    // Booleans
+    if (filters.isEarning === "true") query.isEarning = true;
+    if (filters.isEarning === "false") query.isEarning = false;
 
-    // Apply Array Length logic to find out how many years they have collected
+    if (filters.isException === "true") query.isException = true;
+    if (filters.isException === "false") query.isException = false;
+
+    if (filters.isFullyVerified === "true") query["verificationCycle.isFullyVerified"] = true;
+    if (filters.isFullyVerified === "false") query["verificationCycle.isFullyVerified"] = false;
+
+    // Array Checks
+    if (filters.hasProblems === "true") query.problems = { $exists: true, $not: { $size: 0 } };
+    if (filters.hasProblems === "false") query.problems = { $size: 0 };
+
     if (filters.yearCount !== undefined && filters.yearCount !== null) {
       query.distributedYears = { $size: filters.yearCount };
     }
 
     // Fetch the data
     const results = await Beneficiary.find(query)
-      .select("fullName aadharNumber mobileNumber currentPincode area referencedBy distributedYears status")
-      .limit(150) // Limit to keep the UI snappy
+      .select("fullName aadharNumber mobileNumber currentPincode area referencedBy distributedYears status gender isEarning totalFamilyIncome housingType isException")
+      .limit(5000) // Increased limit from 150 to 5000 so you can see all your records!
       .lean();
 
     return { success: true, data: JSON.parse(JSON.stringify(results)) };

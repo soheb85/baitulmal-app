@@ -9,17 +9,19 @@ import {
   UserCog,
   ChevronRight,
   ShieldAlert,
-  Info,
+  History,
+  Trash2,
+  AlertOctagon,
+  DatabaseBackup,
+  ListChecks,
   RotateCcw,
   Users,
   Layers,
   Zap,
-  History,
-  Trash2,
-  Download,
-  AlertOctagon,
-  DatabaseBackup,
-  ListChecks // <-- Added new icon for Bulk Override
+  Settings2, // For Web Config
+  FileText, // For Reports
+  Terminal, // For Database Access
+  FileSpreadsheet,
 } from "lucide-react";
 
 export default function AdvancedToolsPage() {
@@ -28,6 +30,40 @@ export default function AdvancedToolsPage() {
   if (isNavigating) return <NavigationLoader message="Opening Tool..." />;
 
   const toolSections = [
+    {
+      group: "System Configuration",
+      tools: [
+        {
+          title: "Global Web Config",
+          desc: "Manage global application variables, toggle features, queue limits, and active distribution years.",
+          icon: <Settings2 className="w-6 h-6 text-teal-600" />,
+          route: "/admin/advanced-tools/web-config",
+          color: "bg-teal-50 dark:bg-teal-900/20",
+          borderColor: "border-teal-100 dark:border-teal-800",
+        },
+      ],
+    },
+    {
+      group: "Analytics & Exports",
+      tools: [
+        {
+        title: "Excel Engine Builder", // NEW TOOL ENTRY
+        desc: "Build highly customized Excel reports with dynamic headers, column mapping, and row styling.",
+        icon: <FileSpreadsheet className="w-6 h-6 text-emerald-600" />,
+        route: "/admin/advanced-tools/excel-builder",
+        color: "bg-emerald-50 dark:bg-emerald-900/20",
+        borderColor: "border-emerald-100 dark:border-emerald-800",
+      },
+      {
+        title: "Standard PDF Reports",
+        desc: "Generate and download official PDF documents for distribution audits.",
+        icon: <FileText className="w-6 h-6 text-pink-600" />,
+        route: "/admin/advanced-tools/reports",
+        color: "bg-pink-50 dark:bg-pink-900/20",
+        borderColor: "border-pink-100 dark:border-pink-800",
+      },
+      ],
+    },
     {
       group: "Data Operations",
       tools: [
@@ -38,14 +74,6 @@ export default function AdvancedToolsPage() {
           route: "/admin/advanced-tools/excel-import",
           color: "bg-green-50 dark:bg-green-900/20",
           borderColor: "border-green-100 dark:border-green-800",
-        },
-        {
-          title: "Database Export",
-          desc: "Download a full backup of all beneficiary records in Excel format.",
-          icon: <Download className="w-6 h-6 text-emerald-600" />,
-          route: "/admin/advanced-tools/export-data",
-          color: "bg-emerald-50 dark:bg-emerald-900/20",
-          borderColor: "border-emerald-100 dark:border-emerald-800",
         },
         {
           title: "Restore Backup",
@@ -63,7 +91,6 @@ export default function AdvancedToolsPage() {
           color: "bg-orange-50 dark:bg-orange-900/20",
           borderColor: "border-orange-100 dark:border-orange-800",
         },
-        // --- NEW BULK OVERRIDE TOOL ---
         {
           title: "Bulk Field Override",
           desc: "Update a specific field for multiple selected users or the entire database at once.",
@@ -119,6 +146,14 @@ export default function AdvancedToolsPage() {
     {
       group: "Danger Zone",
       tools: [
+        {
+          title: "Raw Database Console",
+          desc: "Execute raw MongoDB queries directly against the database. Super Admins only.",
+          icon: <Terminal className="w-6 h-6 text-slate-600 dark:text-slate-400" />,
+          route: "/admin/advanced-tools/db-access",
+          color: "bg-slate-100 dark:bg-slate-900/40",
+          borderColor: "border-slate-300 dark:border-slate-700",
+        },
         {
           title: "Bulk Record Deletion",
           desc: "Multi-select search results to permanently delete them. (Requires backup first).",
@@ -194,18 +229,18 @@ export default function AdvancedToolsPage() {
                   onClick={() => handleBack(tool.route)}
                   className={`flex items-start gap-4 p-5 ${tool.color} border ${tool.borderColor} rounded-[2.5rem] text-left active:scale-[0.98] transition-all group shadow-sm`}
                 >
-                  <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm group-hover:rotate-6 transition-transform">
+                  <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm group-hover:rotate-6 transition-transform shrink-0">
                     {tool.icon}
                   </div>
-                  <div className="flex-1">
-                    <h3 className="font-black text-gray-900 dark:text-white text-lg leading-none mb-1.5">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-black text-gray-900 dark:text-white text-lg leading-none mb-1.5 truncate">
                       {tool.title}
                     </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium leading-relaxed">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium leading-relaxed line-clamp-2">
                       {tool.desc}
                     </p>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-300 self-center group-hover:translate-x-1 transition-transform" />
+                  <ChevronRight className="w-5 h-5 text-gray-300 self-center group-hover:translate-x-1 transition-transform shrink-0" />
                 </button>
               ))}
             </div>
