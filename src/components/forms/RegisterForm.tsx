@@ -161,7 +161,7 @@ export default function RegisterForm({
         if (isEditMode && formData.aadharNumber === initialData?.aadharNumber) return;
         const res = await checkAadharDuplicate(formData.aadharNumber);
         if (res.exists)
-          setAadharStatus({ exists: true, message: res.message || "Aadhar number already registered", name: res.name });
+          setAadharStatus({ exists: true, message: res.message || "Aadhar number already registered", name: res.name, mobileNumber: res.mobileNumber, rationCount: res.rationCount });
         else setAadharStatus(null);
       } else {
         setAadharStatus(null);

@@ -52,10 +52,19 @@ export async function fetchFilteredBeneficiaries(
     // --- DIRECT SEARCH LOGIC ---
     if (searchQuery && searchQuery.trim() !== "") {
       const searchStr = searchQuery.trim();
+      
+      // 1. Escape special characters to prevent regex crashes
+      const escapedSearch = searchStr.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+      
+      // 2. Smart Name Match: Split by space so "Khan Ali" matches "Ali Khan"
+      const nameWords = searchStr.split(/\s+/).map(word => ({
+        fullName: { $regex: word.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), $options: "i" }
+      }));
+
       query.$or = [
-        { fullName: { $regex: searchStr, $options: "i" } }, 
-        { aadharNumber: searchStr }, 
-        { mobileNumber: searchStr }, 
+        { $and: nameWords }, // Matches all typed words in the name, in any order
+        { aadharNumber: { $regex: escapedSearch, $options: "i" } }, // Allows partial Aadhaar search (e.g., last 4 digits)
+        { mobileNumber: { $regex: escapedSearch, $options: "i" } }, // Allows partial Mobile search
       ];
     }
 

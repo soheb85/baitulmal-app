@@ -18,10 +18,11 @@ import {
   Users,
   Layers,
   Zap,
-  Settings2, // For Web Config
-  FileText, // For Reports
-  Terminal, // For Database Access
+  Settings2,
+  FileText,
+  Terminal,
   FileSpreadsheet,
+  Scissors, // <-- Add this icon
 } from "lucide-react";
 
 export default function AdvancedToolsPage() {
@@ -47,21 +48,21 @@ export default function AdvancedToolsPage() {
       group: "Analytics & Exports",
       tools: [
         {
-        title: "Excel Engine Builder", // NEW TOOL ENTRY
-        desc: "Build highly customized Excel reports with dynamic headers, column mapping, and row styling.",
-        icon: <FileSpreadsheet className="w-6 h-6 text-emerald-600" />,
-        route: "/admin/advanced-tools/excel-builder",
-        color: "bg-emerald-50 dark:bg-emerald-900/20",
-        borderColor: "border-emerald-100 dark:border-emerald-800",
-      },
-      {
-        title: "Standard PDF Reports",
-        desc: "Generate and download official PDF documents for distribution audits.",
-        icon: <FileText className="w-6 h-6 text-pink-600" />,
-        route: "/admin/advanced-tools/reports",
-        color: "bg-pink-50 dark:bg-pink-900/20",
-        borderColor: "border-pink-100 dark:border-pink-800",
-      },
+          title: "Excel Engine Builder",
+          desc: "Build highly customized Excel reports with dynamic headers, column mapping, and row styling.",
+          icon: <FileSpreadsheet className="w-6 h-6 text-emerald-600" />,
+          route: "/admin/advanced-tools/excel-builder",
+          color: "bg-emerald-50 dark:bg-emerald-900/20",
+          borderColor: "border-emerald-100 dark:border-emerald-800",
+        },
+        {
+          title: "Standard PDF Reports",
+          desc: "Generate and download official PDF documents for distribution audits.",
+          icon: <FileText className="w-6 h-6 text-pink-600" />,
+          route: "/admin/advanced-tools/reports",
+          color: "bg-pink-50 dark:bg-pink-900/20",
+          borderColor: "border-pink-100 dark:border-pink-800",
+        },
       ],
     },
     {
@@ -91,6 +92,16 @@ export default function AdvancedToolsPage() {
           color: "bg-orange-50 dark:bg-orange-900/20",
           borderColor: "border-orange-100 dark:border-orange-800",
         },
+        // --- NEW TOOL ADDED HERE ---
+        {
+          title: "Nested Array Editor",
+          desc: "Surgically delete specific items inside complex arrays (like family members or ration history).",
+          icon: <Scissors className="w-6 h-6 text-fuchsia-600" />,
+          route: "/admin/advanced-tools/array-editor",
+          color: "bg-fuchsia-50 dark:bg-fuchsia-900/20",
+          borderColor: "border-fuchsia-100 dark:border-fuchsia-800",
+        },
+        // ---------------------------
         {
           title: "Bulk Field Override",
           desc: "Update a specific field for multiple selected users or the entire database at once.",

@@ -9,7 +9,6 @@ export async function checkAadharDuplicate(aadhar: string) {
     const existing = await Beneficiary.findOne({ aadharNumber: aadhar }).lean();
     
     if (existing) {
-      console.log("Existing Beneficiary Found:", existing);
       // 1. Calculate Expiry Year
       const expiryDate = existing.verificationCycle?.endDate;
       const expiryYear = expiryDate ? new Date(expiryDate).getFullYear() : (new Date().getFullYear() + 3);
