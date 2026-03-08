@@ -7,7 +7,8 @@ import { useBackNavigation } from "@/hooks/useBackNavigation";
 import NavigationLoader from "@/components/ui/NavigationLoader";
 import { 
   ArrowLeft, Filter, Users, X, ChevronRight, Loader2,
-  MapPin, Map, Tag, CalendarDays, ShieldCheck, UserCog, Edit3, Search, HomeIcon, Briefcase, IndianRupee, Trash2
+  MapPin, Map, Tag, CalendarDays, ShieldCheck, UserCog, Edit3, Search, HomeIcon, Briefcase, IndianRupee, Trash2,
+  Fingerprint, Copy, CheckCircle2 // <-- Added new icons here
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -31,6 +32,9 @@ export default function SmartExplorerPage() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [results, setResults] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  
+  // NEW: State to track which Aadhaar is currently copied
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -45,7 +49,7 @@ export default function SmartExplorerPage() {
 
       if (savedState) {
         const parsed = JSON.parse(savedState);
-        initialFilters = { ...DEFAULT_FILTERS, ...parsed.filters }; // Merge to catch newly added filter keys
+        initialFilters = { ...DEFAULT_FILTERS, ...parsed.filters }; 
         initialSearch = parsed.searchQuery || "";
         setFilters(initialFilters);
         setSearchQuery(initialSearch);
@@ -89,6 +93,16 @@ export default function SmartExplorerPage() {
     setIsFilterOpen(false);
   };
 
+  // NEW: Handler to copy Aadhaar without opening the modal
+  const handleCopyAadhaar = (e: React.MouseEvent, aadhar: string, id: string) => {
+    e.stopPropagation(); // Prevents the parent <button> from triggering Action Modal
+    if (aadhar) {
+      navigator.clipboard.writeText(aadhar.toString());
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000); // Reset icon after 2 seconds
+    }
+  };
+
   const hasActiveFilters = Object.values(filters).some(val => val !== "" && val !== null) || searchQuery.trim() !== "";
 
   if (isNavigating) return <NavigationLoader message="Routing..." />;
@@ -112,7 +126,6 @@ export default function SmartExplorerPage() {
           </div>
 
           <div className="space-y-3 w-full min-w-0">
-            {/* 1. View Master Profile */}
             <button onClick={() => handleBack(`/beneficiaries/${selectedUser._id}`)} className="w-full flex items-center p-4 bg-purple-50 dark:bg-purple-900/10 rounded-2xl border border-purple-100 dark:border-purple-900/30 active:scale-95 transition-transform text-left min-w-0">
               <div className="bg-purple-100 dark:bg-purple-900/50 p-2.5 rounded-xl mr-4 shrink-0"><UserCog className="w-5 h-5 text-purple-600" /></div>
               <div className="flex-1 min-w-0 pr-2">
@@ -122,7 +135,6 @@ export default function SmartExplorerPage() {
               <ChevronRight className="w-4 h-4 text-purple-300 shrink-0" />
             </button>
 
-            {/* 2. DIRECT EDIT MODE (NEW) */}
             <button onClick={() => handleBack(`/beneficiaries/${selectedUser._id}/edit`)} className="w-full flex items-center p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 active:scale-95 transition-transform text-left min-w-0">
               <div className="bg-emerald-100 dark:bg-emerald-900/50 p-2.5 rounded-xl mr-4 shrink-0"><Edit3 className="w-5 h-5 text-emerald-600" /></div>
               <div className="flex-1 min-w-0 pr-2">
@@ -132,7 +144,6 @@ export default function SmartExplorerPage() {
               <ChevronRight className="w-4 h-4 text-emerald-300 shrink-0" />
             </button>
 
-            {/* 3. Verify Details */}
             <button onClick={() => router.push(`/verify?search=${selectedUser.aadharNumber}`)} className="w-full flex items-center p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/30 active:scale-95 transition-transform text-left min-w-0">
               <div className="bg-blue-100 dark:bg-blue-900/50 p-2.5 rounded-xl mr-4 shrink-0"><Search className="w-5 h-5 text-blue-600" /></div>
               <div className="flex-1 min-w-0 pr-2">
@@ -142,7 +153,6 @@ export default function SmartExplorerPage() {
               <ChevronRight className="w-4 h-4 text-blue-300 shrink-0" />
             </button>
 
-            {/* 4. Send to Check-In */}
             <button onClick={() => router.push(`/distribution/check-in?search=${selectedUser.aadharNumber}`)} className="w-full flex items-center p-4 bg-orange-50 dark:bg-orange-900/10 rounded-2xl border border-orange-100 dark:border-orange-900/30 active:scale-95 transition-transform text-left min-w-0">
               <div className="bg-orange-100 dark:bg-orange-900/50 p-2.5 rounded-xl mr-4 shrink-0"><ShieldCheck className="w-5 h-5 text-orange-600" /></div>
               <div className="flex-1 min-w-0 pr-2">
@@ -233,6 +243,25 @@ export default function SmartExplorerPage() {
                        <span className="truncate">{user.area || user.currentPincode}</span>
                     </div>
 
+                    {/* NEW: Aadhaar Copy Badge */}
+                    <div 
+                      onClick={(e) => handleCopyAadhaar(e, user.aadharNumber, user._id)}
+                      className="flex items-center gap-2 mt-2 bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100/50 dark:border-indigo-800/30 px-2.5 py-1.5 rounded-lg w-fit hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+                      title="Click to copy Aadhaar"
+                    >
+                      <Fingerprint className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      <span className="text-[11px] font-mono font-bold text-indigo-700 dark:text-indigo-300">
+                        {user.aadharNumber.aadharNumber
+                        ?.toString()
+                        .replace(/(\d{4})(?=\d)/g, "$1 ") || "N/A"}
+                      </span>
+                      {copiedId === user._id ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                      ) : (
+                        <Copy className="w-3 h-3 text-indigo-400 shrink-0" />
+                      )}
+                    </div>
+
                     <div className="flex flex-wrap gap-1.5 mt-3">
                        <span className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 text-[9px] font-black px-2 py-0.5 rounded-md uppercase border border-indigo-100 dark:border-indigo-800 shrink-0">
                          {user.distributedYears?.length || 0} Yrs Hist
@@ -251,6 +280,11 @@ export default function SmartExplorerPage() {
                            {user.status}
                          </span>
                        )}
+                       {user.distributedYears?.includes(new Date().getFullYear()) && (
+                        <span className="bg-blue-50 dark:bg-green-900/30 text-green-600 text-[9px] font-black px-2 py-0.5 rounded-md uppercase border border-blue-100 dark:border-green-800 shrink-0">
+                          Collected
+                          </span>
+                        )}
                     </div>
                   </div>
                   <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-full shrink-0">

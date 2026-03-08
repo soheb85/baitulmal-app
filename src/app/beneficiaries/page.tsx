@@ -7,10 +7,11 @@ import {
   Search,
   ArrowLeft,
   ChevronRight,
-  User,
+  Fingerprint,
   Loader2,
-  CreditCard,
+  CheckCircle2,
   Phone,
+  Copy,
 } from "lucide-react";
 import { useBackNavigation } from "@/hooks/useBackNavigation";
 import NavigationLoader from "@/components/ui/NavigationLoader";
@@ -57,6 +58,7 @@ export default function BeneficiariesListPage() {
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("ALL");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const debouncedSearch = useDebounce(search, 400);
 
@@ -85,6 +87,20 @@ export default function BeneficiariesListPage() {
       active = false;
     };
   }, [debouncedSearch, filter]);
+
+  // NEW: Handler to copy Aadhaar without opening the modal
+  const handleCopyAadhaar = (
+    e: React.MouseEvent,
+    aadhar: string,
+    id: string,
+  ) => {
+    e.stopPropagation(); // Prevents the parent <button> from triggering Action Modal
+    if (aadhar) {
+      navigator.clipboard.writeText(aadhar.toString());
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000); // Reset icon after 2 seconds
+    }
+  };
 
   const handleLoadMore = async () => {
     if (moreLoading || !hasMore) return;
@@ -131,7 +147,9 @@ export default function BeneficiariesListPage() {
             <h1 className="text-xl font-black text-gray-900 dark:text-white truncate">
               Beneficiaries
             </h1>
-            <p className="text-xs text-gray-400 truncate">Manage registered families</p>
+            <p className="text-xs text-gray-400 truncate">
+              Manage registered families
+            </p>
           </div>
         </div>
 
@@ -151,7 +169,10 @@ export default function BeneficiariesListPage() {
         </div>
 
         {/* FILTER */}
-        <div className="px-3 pb-4 flex gap-2 overflow-x-auto w-full" style={{ scrollbarWidth: 'none' }}>
+        <div
+          className="px-3 pb-4 flex gap-2 overflow-x-auto w-full"
+          style={{ scrollbarWidth: "none" }}
+        >
           {["ALL", "ACTIVE", "BLACKLISTED"].map((f) => (
             <button
               key={f}
@@ -198,7 +219,7 @@ export default function BeneficiariesListPage() {
         {list.map((item) => {
           const token = item.todayStatus?.tokenNumber;
           const queueDate = item.todayStatus?.queueDate;
-          const status = item.todayStatus?.status; 
+          const status = item.todayStatus?.status;
           const isToday = queueDate === today;
 
           return (
@@ -247,14 +268,43 @@ export default function BeneficiariesListPage() {
                   </div>
                 )}
 
-                <div className="flex items-center gap-2 text-sm text-gray-500 mt-1 min-w-0">
-                  <Phone className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{item.mobileNumber}</span>
-                </div>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
 
-                <div className="flex items-center gap-2 text-sm text-gray-500 min-w-0">
-                  <CreditCard className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{formatAadhaar(item.aadharNumber)}</span>
+                  {/* Aadhaar */}
+                  <div
+                    onClick={(e) =>
+                      handleCopyAadhaar(e, item.aadharNumber, item._id)
+                    }
+                    className="flex items-center gap-2 bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100/50 dark:border-indigo-800/30 px-2.5 py-1.5 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors cursor-pointer whitespace-nowrap"
+                    title="Click to copy Aadhaar"
+                  >
+                    <Fingerprint className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+
+                    <span className="text-[11px] font-mono font-bold text-indigo-700 dark:text-indigo-300">
+                      {item.aadharNumber
+                        ?.toString()
+                        .replace(/(\d{4})(?=\d)/g, "$1 ") || "N/A"}
+                    </span>
+
+                    {copiedId === item._id ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-indigo-400 shrink-0" />
+                    )}
+                  </div>
+
+                  {/* Phone */}
+                  <a
+                    href={`tel:${item.mobileNumber}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-2 bg-green-50/60 dark:bg-green-900/20 border border-green-100 dark:border-green-800 px-2.5 py-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors whitespace-nowrap"
+                    title="Tap to call"
+                  >
+                    <Phone className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                    <span className="text-[11px] font-mono font-bold text-green-700 dark:text-green-300">
+                      {item.mobileNumber || "N/A"}
+                    </span>
+                  </a>
                 </div>
               </div>
 

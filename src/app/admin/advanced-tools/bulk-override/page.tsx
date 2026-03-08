@@ -2,12 +2,14 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { getDistinctOptions, fetchTargets, executeBulkOverride } from "@/app/actions/admin/bulkOverrideAction";
+import { getDistinctOptions, fetchTargets, executeBulkOverride, MultiFilter } from "@/app/actions/admin/bulkOverrideAction";
 import { useBackNavigation } from "@/hooks/useBackNavigation";
 import NavigationLoader from "@/components/ui/NavigationLoader";
+import SchemaGuideModal from "@/components/admin/SchemaGuideModal";
 import { 
   ArrowLeft, Search, Edit3, CheckCircle2, Loader2, AlertTriangle, 
-  X, ListChecks, Filter, Users, CalendarDays, CheckSquare
+  X, ListChecks, Filter, Users, CalendarDays, CheckSquare, Plus, Trash2,
+  Settings, BookOpen // <-- Added BookOpen icon
 } from "lucide-react";
 
 // --- STATIC FIELD GROUPS ---
@@ -74,6 +76,7 @@ const STATIC_GROUPS = [
       { label: "Queue Date (YYYY-MM-DD)", key: "todayStatus.queueDate", type: "text" },
       { label: "Queue Timestamp", key: "todayStatus.date", type: "date" },
       { label: "Queue Year", key: "todayStatus.year", type: "number" },
+      { label: "Temporary Note", key: "todayStatus.tempNote", type: "text" }, // Added to UI
     ]
   },
   {
@@ -89,87 +92,67 @@ const STATIC_GROUPS = [
   }
 ];
 
-// --- MASSIVELY EXPANDED FILTERS ---
 const COMMON_FILTERS = [
   { label: "Area / Location", key: "area" },
   { label: "Current Pincode", key: "currentPincode" },
   { label: "Aadhaar Pincode", key: "aadharPincode" },
   { label: "Referenced By", key: "referencedBy" },
-  { label: "Account Status", key: "status" },
-  { label: "Gender", key: "gender" },
-  { label: "Husband/Marital Status", key: "husbandStatus" },
-  { label: "Housing Type", key: "housingType" },
-  { label: "Queue Status Today", key: "todayStatus.status" },
+  { label: "Account Status", key: "status", options: ["ACTIVE", "BLACKLISTED", "ON_HOLD"] },
+  { label: "Gender", key: "gender", options: ["MALE", "FEMALE"] },
+  { label: "Husband/Marital Status", key: "husbandStatus", options: ["ALIVE", "WIDOW", "ABANDONED", "DIVORCED", "DISABLED"] },
+  { label: "Housing Type", key: "housingType", options: ["OWN", "RENT"] },
+  { label: "Queue Status Today", key: "todayStatus.status", options: ["CHECKED_IN", "COLLECTED"] },
   { label: "Distributed Year (Contains)", key: "distributedYears" }, 
   { label: "Is Exception Case", key: "isException", isBool: true },
   { label: "Is Main Earning", key: "isEarning", isBool: true },
   { label: "Is Fully Verified", key: "verificationCycle.isFullyVerified", isBool: true },
+  { label: "⚙️ Custom Schema Field", key: "CUSTOM" },
 ];
 
 function BulkOverridePageContent() {
   const { isNavigating, handleBack } = useBackNavigation("/admin/advanced-tools");
   
-  // Filtering State
-  const [filterField, setFilterField] = useState("area");
-  const [filterValue, setFilterValue] = useState("");
-  const [filterOptions, setFilterOptions] = useState<string[]>([]);
-  const [loadingOptions, setLoadingOptions] = useState(false);
-  
-  // Results State
+  const [filters, setFilters] = useState<MultiFilter[]>([{ field: "area", operator: "equals", value: "", customField: "" }]);
   const [targets, setTargets] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  
-  // Selection State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
 
-  // Update Config State
   const [isChoosingUpdate, setIsChoosingUpdate] = useState(false);
   const [updateConfig, setUpdateConfig] = useState<any>(null); 
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSuccess, setShowSuccess] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // NEW: State for Schema Cheat Sheet Sidebar
+  const [showSchemaGuide, setShowSchemaGuide] = useState(false);
 
-  // Load dynamic options when filter field changes
-  useEffect(() => {
-    async function loadOptions() {
-      const selectedDef = COMMON_FILTERS.find(f => f.key === filterField);
-      if (selectedDef?.isBool) {
-        setFilterOptions(["true", "false"]);
-        setFilterValue("");
-        return;
-      }
-      
-      setLoadingOptions(true);
-      const res = await getDistinctOptions(filterField);
-      if (res.success && Array.isArray(res.data)) {
-        // FIXED: Filter out zeroes from the distributedYears array
-        let rawOptions = res.data;
-        if (filterField === "distributedYears") {
-            rawOptions = rawOptions.filter(val => val !== 0 && val !== "0");
-        }
-        setFilterOptions(rawOptions as string[]);
-      }
-      setFilterValue("");
-      setLoadingOptions(false);
-    }
-    loadOptions();
-  }, [filterField]);
+  const addFilterRow = () => {
+    setFilters([...filters, { field: "status", operator: "equals", value: "", customField: "" }]);
+  };
+
+  const removeFilterRow = (index: number) => {
+    setFilters(filters.filter((_, i) => i !== index));
+  };
+
+  const updateFilter = (index: number, key: keyof MultiFilter, val: string) => {
+    const newFilters = [...filters];
+    newFilters[index][key] = val;
+    if (key === "field") newFilters[index].value = "";
+    setFilters(newFilters);
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSearching(true);
     
-    let valToSearch: any = filterValue;
-    if (filterValue === "true") valToSearch = true;
-    if (filterValue === "false") valToSearch = false;
-    if (filterField === "distributedYears" && filterValue) valToSearch = Number(filterValue); // Parse year string to int
-
-    const res = await fetchTargets(filterField, valToSearch);
+    const res = await fetchTargets(filters);
     if (res.success) {
       setTargets(res.data);
       setSelectAll(false);
       setSelectedIds(new Set());
+    } else {
+        alert(res.message);
     }
     setIsSearching(false);
   };
@@ -196,7 +179,6 @@ function BulkOverridePageContent() {
     
     let finalValue = updateConfig.newValue;
     
-    // Convert special macro to Number before sending
     if (updateConfig.key === "INJECT_HISTORY_YEAR") {
         finalValue = Number(finalValue);
     } else {
@@ -206,16 +188,10 @@ function BulkOverridePageContent() {
         else if (updateConfig.type === "date" && finalValue) finalValue = new Date(finalValue);
     }
 
-    let fVal: any = filterValue;
-    if (fVal === "true") fVal = true;
-    if (fVal === "false") fVal = false;
-    if (filterField === "distributedYears" && fVal) fVal = Number(fVal);
-
     const res = await executeBulkOverride(
       Array.from(selectedIds), 
       selectAll, 
-      filterField, 
-      fVal, 
+      filters, 
       updateConfig.key, 
       finalValue
     );
@@ -237,56 +213,137 @@ function BulkOverridePageContent() {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return "";
     d.setFullYear(d.getFullYear() + 3);
-    d.setDate(d.getDate() - 45); // Lunar adjustment preview
+    d.setDate(d.getDate() - 45); 
     return d.toISOString().split('T')[0];
+  };
+
+  const renderFilterInput = (f: MultiFilter, index: number) => {
+    const def = COMMON_FILTERS.find(x => x.key === f.field);
+    
+    if (def?.isBool) {
+        return (
+            <select value={f.value} onChange={(e) => updateFilter(index, "value", e.target.value)} className="w-full p-3.5 rounded-xl bg-white dark:bg-gray-900 text-sm font-bold border border-gray-200 dark:border-gray-700 outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">-- Choose --</option>
+                <option value="true">True (Yes)</option>
+                <option value="false">False (No)</option>
+            </select>
+        );
+    }
+    
+    if (def?.options) {
+        return (
+            <select value={f.value} onChange={(e) => updateFilter(index, "value", e.target.value)} className="w-full p-3.5 rounded-xl bg-white dark:bg-gray-900 text-sm font-bold border border-gray-200 dark:border-gray-700 outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">-- Select --</option>
+                {def.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+        );
+    }
+
+    return (
+        <input 
+            type="text" 
+            placeholder={f.field === "CUSTOM" ? "Enter Exact Value..." : "Enter value..."}
+            value={f.value}
+            onChange={(e) => updateFilter(index, "value", e.target.value)}
+            className="w-full p-3.5 rounded-xl bg-white dark:bg-gray-900 text-sm font-bold border border-gray-200 dark:border-gray-700 outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+    );
   };
 
   if (isNavigating) return <NavigationLoader message="Exiting..." />;
 
   return (
     <main className="min-h-screen flex flex-col w-full bg-gray-50 dark:bg-gray-950 relative font-outfit">
-      
-      <div className="w-full max-w-2xl mx-auto h-full overflow-y-auto px-4 pt-6 pb-32">
+      <div className="w-full max-w-3xl mx-auto h-full overflow-y-auto px-4 pt-6 pb-32">
         
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6 bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
-          <button onClick={() => handleBack()} className="p-2 bg-gray-50 dark:bg-gray-800 rounded-xl active:scale-90 transition">
-            <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
-          </button>
-          <div>
-            <h1 className="text-lg font-black text-indigo-600 flex items-center gap-2">
-              <ListChecks className="w-4 h-4" /> Bulk Field Override
-            </h1>
-            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Update Multiple Users Simultaneously</p>
+        <div className="flex items-center justify-between gap-3 mb-6 bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+          <div className="flex items-center gap-3">
+              <button onClick={() => handleBack()} className="p-2 bg-gray-50 dark:bg-gray-800 rounded-xl active:scale-90 transition">
+                <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+              </button>
+              <div>
+                <h1 className="text-lg font-black text-indigo-600 flex items-center gap-2">
+                  <ListChecks className="w-4 h-4" /> Bulk Field Override
+                </h1>
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Update Multiple Users</p>
+              </div>
           </div>
+          
+          <button onClick={() => setShowSchemaGuide(true)} className="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-xl flex items-center gap-2 active:scale-90 transition">
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline text-xs font-black uppercase">Schema Guide</span>
+          </button>
         </div>
 
-        {/* STEP 1: Search / Filter */}
-        <div className="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm mb-6">
-          <h2 className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-2 mb-4">
-            <Filter className="w-4 h-4 text-indigo-500" /> 1. Filter Database
-          </h2>
-          <form onSubmit={handleSearch} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1 mb-1 block">Filter By Field</label>
-                <select value={filterField} onChange={(e) => setFilterField(e.target.value)} className="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500">
-                  {COMMON_FILTERS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1 mb-1 block">Equals Value</label>
-                <div className="relative">
-                  <select disabled={loadingOptions} value={filterValue} onChange={(e) => setFilterValue(e.target.value)} className="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50">
-                    <option value="">-- Select Value --</option>
-                    {filterOptions.map((opt, i) => <option key={i} value={String(opt)}>{String(opt)}</option>)}
-                  </select>
-                  {loadingOptions && <Loader2 className="w-4 h-4 absolute right-3 top-3.5 animate-spin text-indigo-500" />}
+        {/* STEP 1: UI FIXED Query Builder */}
+        <div className="bg-white dark:bg-gray-900 p-5 md:p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm mb-6">
+          <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
+                <Filter className="w-4 h-4 text-indigo-500" /> 1. Build Query
+              </h2>
+              <button type="button" onClick={addFilterRow} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg active:scale-95 transition-transform">
+                  <Plus className="w-3 h-3" /> Add Rule
+              </button>
+          </div>
+          
+          <form onSubmit={handleSearch} className="space-y-6">
+            <div className="space-y-4">
+              {filters.map((f, index) => (
+                <div key={index} className="flex flex-col gap-4 bg-gray-50 dark:bg-gray-800/40 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 relative">
+                  
+                  {filters.length > 1 && (
+                    <button type="button" onClick={() => removeFilterRow(index)} className="absolute top-4 right-4 p-2 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  <div className="pr-12">
+                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Target Field</label>
+                    <select value={f.field} onChange={(e) => updateFilter(index, "field", e.target.value)} className="w-full p-3.5 rounded-xl bg-white dark:bg-gray-900 text-sm font-bold border border-gray-200 dark:border-gray-700 outline-none focus:ring-2 focus:ring-indigo-500">
+                      {COMMON_FILTERS.map(def => <option key={def.key} value={def.key}>{def.label}</option>)}
+                    </select>
+                  </div>
+
+                  {/* 1.5 Custom Schema Input with Date Help */}
+                  {f.field === "CUSTOM" && (
+                    <div className="animate-in fade-in slide-in-from-top-2 p-3 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-800/30">
+                       <label className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 ml-1">
+                         <Settings className="w-3.5 h-3.5" /> Exact Database Key
+                       </label>
+                       <input 
+                         type="text" 
+                         placeholder="e.g., createdAt or familyMembersDetail.0.age"
+                         value={f.customField || ""}
+                         onChange={(e) => updateFilter(index, "customField", e.target.value)}
+                         className="w-full p-3.5 rounded-xl bg-white dark:bg-gray-900 text-sm font-mono font-bold border border-indigo-100 dark:border-indigo-800/50 outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
+                       />
+                       {/* DATE NOTE */}
+                       <div className="bg-white dark:bg-gray-900 p-2 rounded-lg text-[9px] font-bold text-indigo-500 border border-indigo-100 dark:border-indigo-800/50">
+                          <p>📅 <span className="uppercase font-black text-indigo-700 dark:text-indigo-300">Date Queries:</span> If querying a date field (like <code className="bg-indigo-100 dark:bg-indigo-900/50 px-1 py-0.5 rounded">createdAt</code>), the Match Value MUST be in <code className="bg-indigo-100 dark:bg-indigo-900/50 px-1 py-0.5 rounded text-rose-500">DD/MM/YYYY</code> format (e.g. 15/03/2026).</p>
+                       </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Operator</label>
+                      <select value={f.operator} onChange={(e) => updateFilter(index, "operator", e.target.value)} className="w-full p-3.5 rounded-xl bg-white dark:bg-gray-900 text-xs font-black uppercase text-indigo-600 border border-gray-200 dark:border-gray-700 outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="equals">Is Equal To</option>
+                        <option value="not_equals">Is Not Equal</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Match Value</label>
+                      {renderFilterInput(f, index)}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
-            <button type="submit" disabled={isSearching || !filterValue} className="w-full py-3.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 font-black rounded-xl border border-indigo-100 dark:border-indigo-800/50 flex justify-center items-center gap-2 active:scale-95 transition-transform disabled:opacity-50">
-              {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Search className="w-4 h-4" /> Find Targets</>}
+
+            <button type="submit" disabled={isSearching} className="w-full py-4 mt-2 bg-indigo-600 text-white font-black rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none flex justify-center items-center gap-2 active:scale-95 transition-transform disabled:opacity-50">
+              {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Search className="w-5 h-5" /> FETCH TARGETS</>}
             </button>
           </form>
         </div>
@@ -330,6 +387,11 @@ function BulkOverridePageContent() {
           </div>
         )}
       </div>
+
+      {/* --- OVERLAY: SCHEMA CHEAT SHEET --- */}
+      <SchemaGuideModal 
+      isOpen={showSchemaGuide} 
+      onClose={() => setShowSchemaGuide(false)} />
 
       {/* --- OVERLAY: CHOOSE FIELD TO UPDATE --- */}
       {isChoosingUpdate && !updateConfig && (
@@ -437,7 +499,7 @@ function BulkOverridePageContent() {
             <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-3" />
             <h2 className="font-black text-2xl mb-1 text-gray-900 dark:text-white">{showSuccess} Records</h2>
             <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-6">Successfully Updated</p>
-            <button onClick={() => { setShowSuccess(null); setTargets([]); setFilterValue(""); setSelectedIds(new Set()); }} className="w-full py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-black text-sm rounded-xl active:scale-95 shadow-md">
+            <button onClick={() => { setShowSuccess(null); setTargets([]); setFilters([{ field: "area", operator: "equals", value: "", customField: "" }]); setSelectedIds(new Set()); }} className="w-full py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-black text-sm rounded-xl active:scale-95 shadow-md">
               Finish
             </button>
           </div>
@@ -446,9 +508,10 @@ function BulkOverridePageContent() {
     </main>
   );
 }
+
 export default function Page() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<NavigationLoader message="Loading Tools..." />}>
       <BulkOverridePageContent />
     </Suspense>
   );

@@ -89,8 +89,8 @@ export async function fetchFilteredBeneficiaries(
 
     // Fetch the data
     const results = await Beneficiary.find(query)
-      .select("fullName aadharNumber mobileNumber currentPincode area referencedBy distributedYears status gender isEarning totalFamilyIncome housingType isException")
-      .limit(5000) // Increased limit from 150 to 5000 so you can see all your records!
+      .select("fullName aadharNumber mobileNumber currentPincode area referencedBy distributedYears status gender husbandStatus isEarning totalFamilyIncome housingType isException todayStatus verificationCycle")
+      .limit(5000) // Increased limit to 5000 
       .lean();
 
     return { success: true, data: JSON.parse(JSON.stringify(results)) };
