@@ -20,7 +20,7 @@ const formatMoney = (amount: number) => {
 };
 
 export default function CollectionsDashboard() {
-  const { isNavigating, handleBack } = useBackNavigation("/dashboard");
+  const { isNavigating, handleBack } = useBackNavigation("/");
   
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
