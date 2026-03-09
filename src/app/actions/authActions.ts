@@ -23,30 +23,34 @@ export async function loginUser(formData: any) {
   // 60 seconds * 60 minutes * 6 hours = 21,600 seconds
   const SIX_HOURS = 60 * 60 * 6;
 
-  // Set the session cookie
+  // Set the session cookie (NOW INCLUDES NEW PERMISSIONS)
   (await cookies()).set("session_user", JSON.stringify({
     id: user._id,
     name: user.name,
     role: user.role,
-    username: user.username // Helpful to keep for logging
+    username: user.username,
+    hasCollectionAccess: user.hasCollectionAccess || false,   // <-- ADDED THIS
+    canSubmitCollection: user.canSubmitCollection || false,   // <-- ADDED THIS
+    canApproveCollection: user.canApproveCollection || false  // <-- ADDED THIS
   }), { 
     httpOnly: true, 
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax", // Better security practice
-    maxAge: SIX_HOURS // <--- CHANGED TO 6 HOURS
+    sameSite: "lax", 
+    maxAge: SIX_HOURS
   });
 
   return { success: true };
 }
 
-// LOGOUT (Same as before)
+// LOGOUT
 export async function logoutUser() {
   (await cookies()).delete("session_user");
 }
 
-// CHECK SESSION (Same as before)
+// CHECK SESSION
 export async function getSession() {
   const session = (await cookies()).get("session_user")?.value;
+  // console.log("Session Cookie Value:", session); // Debugging line
   return session ? JSON.parse(session) : null;
 }
 
@@ -109,7 +113,7 @@ export async function requestPasswordReset(username: string) {
   }
 }
 
-// 2. Complete Password Reset
+// 3. Complete Password Reset
 export async function resetPassword(formData: any) {
   await connectDB();
   const { username, pin, newPassword } = formData;

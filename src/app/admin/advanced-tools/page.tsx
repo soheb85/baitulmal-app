@@ -22,7 +22,8 @@ import {
   FileText,
   Terminal,
   FileSpreadsheet,
-  Scissors, // <-- Add this icon
+  Scissors,
+  Flame, // <-- Added for the Super Operations card
 } from "lucide-react";
 
 export default function AdvancedToolsPage() {
@@ -92,7 +93,6 @@ export default function AdvancedToolsPage() {
           color: "bg-orange-50 dark:bg-orange-900/20",
           borderColor: "border-orange-100 dark:border-orange-800",
         },
-        // --- NEW TOOL ADDED HERE ---
         {
           title: "Nested Array Editor",
           desc: "Surgically delete specific items inside complex arrays (like family members or ration history).",
@@ -101,7 +101,6 @@ export default function AdvancedToolsPage() {
           color: "bg-fuchsia-50 dark:bg-fuchsia-900/20",
           borderColor: "border-fuchsia-100 dark:border-fuchsia-800",
         },
-        // ---------------------------
         {
           title: "Bulk Field Override",
           desc: "Update a specific field for multiple selected users or the entire database at once.",
@@ -157,6 +156,16 @@ export default function AdvancedToolsPage() {
     {
       group: "Danger Zone",
       tools: [
+        // --- NEW GOD MODE TOOL ADDED HERE ---
+        {
+          title: "Super Operations",
+          desc: "God Mode: Multi-conditional Query Builder for bulk field overrides, array stripping, and data destruction.",
+          icon: <Flame className="w-6 h-6 text-violet-600" />,
+          route: "/admin/advanced-tools/super-center",
+          color: "bg-violet-100 dark:bg-violet-900/30",
+          borderColor: "border-violet-300 dark:border-violet-700",
+        },
+        // -------------------------------------
         {
           title: "Raw Database Console",
           desc: "Execute raw MongoDB queries directly against the database. Super Admins only.",

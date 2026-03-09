@@ -33,6 +33,22 @@ const UserSchema = new Schema({
     type: Boolean, 
     default: false 
   },
+
+  // --- NEW: BAITULMAL COLLECTION PERMISSIONS ---
+  hasCollectionAccess: { 
+    type: Boolean, 
+    default: false // Controls if the user can SEE the "Baitulmal Collections" card on the Dashboard
+  },
+  canSubmitCollection: { 
+    type: Boolean, 
+    default: false // Controls if the user can create and submit a Daily Challan
+  },
+  canApproveCollection: { 
+    type: Boolean, 
+    default: false // Controls if the user can review and Accept/Reject Challans
+  },
+  // ---------------------------------------------
+
   // Reset fields with index for faster lookup
   resetToken: { 
     type: String, 

@@ -20,7 +20,8 @@ import {
   ChevronRight,
   Database,
   Wrench,
-  Filter
+  Filter,
+  IndianRupee // <-- NEW IMPORT FOR COLLECTION CARD
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { getDashboardStats } from "@/app/actions/getDashboardStats";
@@ -279,25 +280,23 @@ export default function DashboardPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               {isSuperAdmin && (
-  <button
-    onClick={() => handleBack("/admin/users")}
-    // ADDED 'relative' to the class string below to hold the absolute badge
-    className="relative flex flex-col p-4 bg-white dark:bg-gray-900 rounded-[2rem] border border-blue-100 dark:border-blue-900/30 shadow-sm active:scale-95 transition-all text-left"
-  >
-    {/* THE NOTIFICATION BADGE */}
-    {pendingUserCount > 0 && (
-      <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 border-2 border-white dark:border-gray-950 text-[10px] font-black text-white shadow-md animate-in zoom-in">
-        {pendingUserCount > 99 ? "99+" : pendingUserCount}
-      </span>
-    )}
+                <button
+                  onClick={() => handleBack("/admin/users")}
+                  className="relative flex flex-col p-4 bg-white dark:bg-gray-900 rounded-[2rem] border border-blue-100 dark:border-blue-900/30 shadow-sm active:scale-95 transition-all text-left"
+                >
+                  {pendingUserCount > 0 && (
+                    <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 border-2 border-white dark:border-gray-950 text-[10px] font-black text-white shadow-md animate-in zoom-in">
+                      {pendingUserCount > 99 ? "99+" : pendingUserCount}
+                    </span>
+                  )}
 
-    <div className="bg-blue-50 dark:bg-blue-900/50 p-3 rounded-2xl w-fit mb-3">
-      <UserCheck className="w-6 h-6 text-blue-600" />
-    </div>
-    <h3 className="font-black text-gray-900 dark:text-white text-sm">Users</h3>
-    <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-tighter">Approvals</p>
-  </button>
-)}
+                  <div className="bg-blue-50 dark:bg-blue-900/50 p-3 rounded-2xl w-fit mb-3">
+                    <UserCheck className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <h3 className="font-black text-gray-900 dark:text-white text-sm">Users</h3>
+                  <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-tighter">Approvals</p>
+                </button>
+              )}
 
               <button
                 onClick={() => handleBack("/admin/inventory")}
@@ -359,6 +358,27 @@ export default function DashboardPage() {
                   </div>
                   <h3 className="font-black text-white text-sm">Database Sync</h3>
                   <p className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tighter">Migrations & Backups</p>
+                </button>
+              )}
+
+              {/* --- NEW BAITULMAL COLLECTION CARD --- */}
+              {session?.hasCollectionAccess && (
+                <button
+                  onClick={() => handleBack("/admin/collections")}
+                  className="col-span-2 flex items-center justify-between p-4 bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/10 rounded-[2rem] shadow-sm active:scale-95 transition-all text-left border border-yellow-200 dark:border-yellow-900/30"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="bg-gradient-to-br from-yellow-400 to-amber-600 p-3 rounded-2xl w-fit shadow-md">
+                      <IndianRupee className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-gray-900 dark:text-white text-sm">Baitulmal Collections</h3>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 uppercase font-bold tracking-tighter">
+                        Donations • Receipts • Approvals
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-amber-300 dark:text-amber-700 mr-2" />
                 </button>
               )}
             </div>
