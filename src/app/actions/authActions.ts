@@ -6,6 +6,7 @@ import User from "@/models/User";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import nodemailer from "nodemailer";
+import { getCachedUserById } from "@/lib/serverCache"; // <-- IMPORT CACHE
 
 // LOGIN
 export async function loginUser(formData: any) {
@@ -19,19 +20,13 @@ export async function loginUser(formData: any) {
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return { success: false, message: "Invalid password" };
 
-  // --- CALCULATION ---
-  // 60 seconds * 60 minutes * 6 hours = 21,600 seconds
   const SIX_HOURS = 60 * 60 * 6;
 
-  // Set the session cookie (NOW INCLUDES NEW PERMISSIONS)
+  // We only need to store the basic identifiers in the cookie now
   (await cookies()).set("session_user", JSON.stringify({
     id: user._id,
     name: user.name,
-    role: user.role,
     username: user.username,
-    hasCollectionAccess: user.hasCollectionAccess || false,   // <-- ADDED THIS
-    canSubmitCollection: user.canSubmitCollection || false,   // <-- ADDED THIS
-    canApproveCollection: user.canApproveCollection || false  // <-- ADDED THIS
   }), { 
     httpOnly: true, 
     secure: process.env.NODE_ENV === "production",
@@ -47,11 +42,35 @@ export async function logoutUser() {
   (await cookies()).delete("session_user");
 }
 
-// CHECK SESSION
+// CHECK SESSION (⚡ NOW UPGRADED WITH CACHE ⚡)
 export async function getSession() {
-  const session = (await cookies()).get("session_user")?.value;
-  // console.log("Session Cookie Value:", session); // Debugging line
-  return session ? JSON.parse(session) : null;
+  const cookieStr = (await cookies()).get("session_user")?.value;
+  if (!cookieStr) return null;
+
+  const sessionData = JSON.parse(cookieStr);
+
+  try {
+    // Fetch fresh permissions from our 0ms RAM Cache!
+    const freshUser = await getCachedUserById(sessionData.id);
+    
+    // Security check: If admin deleted the user from the DB, force them out
+    if (!freshUser) return null; 
+    
+    // Security check: If admin revoked approval, force them out
+    if (!freshUser.isApproved) return null;
+
+    // Merge static cookie data with live cached permissions
+    return {
+      ...sessionData,
+      role: freshUser.role,
+      hasCollectionAccess: freshUser.hasCollectionAccess,
+      canSubmitCollection: freshUser.canSubmitCollection,
+      canApproveCollection: freshUser.canApproveCollection
+    };
+  } catch (error) {
+    console.error("Session Cache Error:", error);
+    return null; // Fail secure
+  }
 }
 
 export async function checkAvailability(type: "username" | "email", value: string) {
@@ -70,7 +89,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// 2. Request Password Reset (Updated with Email)
+// 2. Request Password Reset
 export async function requestPasswordReset(username: string) {
   await connectDB();
   const user = await User.findOne({ username });
