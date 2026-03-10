@@ -4,7 +4,8 @@
 import { connectDB } from "@/lib/mongoose";
 import User from "@/models/User";
 import { getSession } from "./authActions";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache"; // <-- Import revalidateTag
+import { getCachedUsersList } from "@/lib/serverCache";
 import bcrypt from "bcryptjs";
 
 // --- LIVE AVAILABILITY CHECK ---
@@ -17,7 +18,6 @@ export async function checkAvailability(type: "username" | "email", value: strin
 export async function getPendingUsersCount() {
   await connectDB();
   try {
-    // Replace "PENDING" with whatever exact string you use for unapproved users in your User schema
     const count = await User.countDocuments({ isApproved: false }); 
     return { success: true, count };
   } catch (error) {
@@ -34,7 +34,7 @@ export async function registerUser(formData: any) {
     const { name, username, email, password } = formData;
 
     const existingUser = await User.findOne({ username });
-    if (existingUser) return { success: false, message: "This mobile number is already registered." };
+    if (existingUser) return { success: false, message: "This username/mobile is already registered." };
 
     const existingEmail = await User.findOne({ email });
     if (existingEmail) return { success: false, message: "This email is already registered." };
@@ -46,8 +46,12 @@ export async function registerUser(formData: any) {
       username: username, 
       email: email.toLowerCase(),
       password: hashedPassword,
-      role: "USER", // Default role
-      isApproved: false 
+      role: "USER", 
+      isApproved: false,
+      // Default to false for security; admin must explicitly grant these
+      hasCollectionAccess: false,
+      canSubmitCollection: false,
+      canApproveCollection: false,
     });
 
     return { success: true, message: "Registration successful! Please ask the Super Admin to approve your account." };
@@ -66,7 +70,7 @@ export async function getPendingUsers() {
   return users.map((u: any) => ({ ...u, _id: u._id.toString() }));
 }
 
-// --- 3. UPDATED: Approve a User (With Role Selection) ---
+// --- 3. Approve a User (With Role Selection) ---
 export async function approveUser(userId: string, assignedRole: "USER" | "ADMIN" = "USER") {
   const session = await getSession();
   
@@ -77,7 +81,6 @@ export async function approveUser(userId: string, assignedRole: "USER" | "ADMIN"
   await connectDB();
   
   try {
-    // Approve the user AND set their chosen role
     await User.findByIdAndUpdate(userId, { 
         isApproved: true,
         role: assignedRole 
@@ -90,7 +93,29 @@ export async function approveUser(userId: string, assignedRole: "USER" | "ADMIN"
   }
 }
 
-// --- 4. NEW: Change an Existing User's Role ---
+// --- 4. NEW: UPDATE USER (Role, Approval & Permissions) ---
+export async function updateUserAdmin(userId: string, updateData: any) {
+  const session = await getSession();
+  if (session?.role !== "SUPER_ADMIN") return { success: false, message: "Unauthorized" };
+
+  await connectDB();
+  try {
+    await User.findByIdAndUpdate(userId, {
+      role: updateData.role,
+      isApproved: updateData.isApproved,
+      hasCollectionAccess: updateData.hasCollectionAccess,
+      canSubmitCollection: updateData.canSubmitCollection,
+      canApproveCollection: updateData.canApproveCollection,
+    });
+    
+    revalidatePath("/admin/users");
+    return { success: true, message: "User permissions updated successfully!" };
+  } catch (error: any) {
+    return { success: false, message: "Update failed: " + error.message };
+  }
+}
+
+// --- 5. Change an Existing User's Role (Legacy support) ---
 export async function updateUserRole(userId: string, newRole: "USER" | "ADMIN") {
   const session = await getSession();
   if (session?.role !== "SUPER_ADMIN") return { success: false, message: "Unauthorized" };
@@ -105,18 +130,19 @@ export async function updateUserRole(userId: string, newRole: "USER" | "ADMIN") 
   }
 }
 
-// --- 5. UPDATED: Get All Users (Now fetching 'role') ---
+// --- 6. UPDATED: Get All Users (Now fetching Permissions) ---
 export async function getAllUsers() {
   await connectDB();
   const users = await User.find({ role: { $ne: "SUPER_ADMIN" } }) 
-    .select("name username email isApproved role _id") // Fetch role
+    // ADDED the permission fields to the select query so the UI can read them
+    .select("name username email isApproved role hasCollectionAccess canSubmitCollection canApproveCollection _id") 
     .sort({ createdAt: -1 })
     .lean();
 
   return JSON.parse(JSON.stringify(users));
 }
 
-// --- 6. Delete a User ---
+// --- 7. Delete a User ---
 export async function deleteUser(userId: string) {
   try {
     await connectDB();
