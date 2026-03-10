@@ -257,6 +257,12 @@ BeneficiarySchema.pre("save", function (this: IBeneficiary) {
   }
 });
 
+BeneficiarySchema.index({ "todayStatus.status": 1 });
+BeneficiarySchema.index({ area: 1 });
+BeneficiarySchema.index({ currentPincode: 1 });
+BeneficiarySchema.index({ referencedBy: 1 });
+BeneficiarySchema.index({ status: 1 });
+
 const Beneficiary =
   (mongoose.models.Beneficiary as Model<IBeneficiary>) ||
   mongoose.model<IBeneficiary>("Beneficiary", BeneficiarySchema);

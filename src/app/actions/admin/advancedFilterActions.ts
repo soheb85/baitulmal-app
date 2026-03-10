@@ -3,29 +3,36 @@
 
 import { connectDB } from "@/lib/mongoose";
 import Beneficiary from "@/models/Beneficiary";
+import { unstable_cache } from "next/cache"; // <-- IMPORT CACHE
 
-// 1. Fetch Metadata for the Dropdowns
-export async function getFilterMetadata() {
-  await connectDB();
-  try {
-    const pincodesRaw = await Beneficiary.distinct("currentPincode");
-    const areasRaw = await Beneficiary.distinct("area");
-    const referencesRaw = await Beneficiary.distinct("referencedBy");
+// 1. Fetch Metadata for the Dropdowns (⚡ INSTANT RAM CACHE ⚡)
+export const getFilterMetadata = unstable_cache(
+  async () => {
+    await connectDB();
+    try {
+      const pincodesRaw = await Beneficiary.distinct("currentPincode");
+      const areasRaw = await Beneficiary.distinct("area");
+      const referencesRaw = await Beneficiary.distinct("referencedBy");
 
-    return {
-      success: true,
-      data: {
-        pincodes: pincodesRaw.filter(Boolean).sort(),
-        areas: areasRaw.filter(Boolean).sort(),
-        references: referencesRaw.filter(Boolean).sort(),
-      }
-    };
-  } catch (error: any) {
-    return { success: false, message: error.message };
-  }
-}
+      return {
+        success: true,
+        data: {
+          pincodes: pincodesRaw.filter(Boolean).sort(),
+          areas: areasRaw.filter(Boolean).sort(),
+          references: referencesRaw.filter(Boolean).sort(),
+        }
+      };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
+  },
+  ["explorer_dropdown_metadata"], // Unique Key
+  // We use your master tag! If you add/edit a user, the dropdowns instantly refresh.
+  { tags: ["beneficiaries_list"], revalidate: 86400 } 
+);
 
 // 2. Fetch Beneficiaries based on applied filters AND search query
+// 🛑 DO NOT CACHE THIS: Too many dynamic combinations! MongoDB will handle this fast enough.
 export async function fetchFilteredBeneficiaries(
   filters: {
     pincode?: string;
@@ -37,7 +44,6 @@ export async function fetchFilteredBeneficiaries(
     isEarning?: string; 
     housingType?: string;
     status?: string;
-    // --- NEW FILTERS ---
     isException?: string;
     hasProblems?: string;
     todayStatus?: string;
@@ -62,9 +68,9 @@ export async function fetchFilteredBeneficiaries(
       }));
 
       query.$or = [
-        { $and: nameWords }, // Matches all typed words in the name, in any order
-        { aadharNumber: { $regex: escapedSearch, $options: "i" } }, // Allows partial Aadhaar search (e.g., last 4 digits)
-        { mobileNumber: { $regex: escapedSearch, $options: "i" } }, // Allows partial Mobile search
+        { $and: nameWords }, 
+        { aadharNumber: { $regex: escapedSearch, $options: "i" } }, 
+        { mobileNumber: { $regex: escapedSearch, $options: "i" } }, 
       ];
     }
 
@@ -99,7 +105,7 @@ export async function fetchFilteredBeneficiaries(
     // Fetch the data
     const results = await Beneficiary.find(query)
       .select("fullName aadharNumber mobileNumber currentPincode area referencedBy distributedYears status gender husbandStatus isEarning totalFamilyIncome housingType isException todayStatus verificationCycle")
-      .limit(5000) // Increased limit to 5000 
+      .limit(5000) 
       .lean();
 
     return { success: true, data: JSON.parse(JSON.stringify(results)) };

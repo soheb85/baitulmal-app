@@ -5,7 +5,6 @@ import { connectDB } from "@/lib/mongoose";
 import User from "@/models/User";
 import { getSession } from "./authActions";
 import { revalidatePath, revalidateTag } from "next/cache"; // <-- Import revalidateTag
-import { getCachedUsersList } from "@/lib/serverCache";
 import bcrypt from "bcryptjs";
 
 // --- LIVE AVAILABILITY CHECK ---
