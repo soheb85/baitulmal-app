@@ -31,7 +31,8 @@ import {
   Briefcase,
   IndianRupee,
   StickyNote,
-  Banknote 
+  Banknote,
+  CalendarDays 
 } from "lucide-react";
 import { Scanner } from '@yudiel/react-qr-scanner';
 
@@ -57,6 +58,8 @@ type BeneficiaryData = {
   problems?: string[];
   referencedBy?: string;
   comments?: string;
+  distributedYears?: number[];
+  verificationCycle?: { endDate: string | Date };
 };
 
 const VerificationSkeleton = () => (
@@ -146,7 +149,6 @@ function VerifyContent() {
   if (isNavigating) return <NavigationLoader message="Returning to Home..." />;
 
   return (
-    // FIX 1: overflow-x-hidden completely prevents screen stretching at the top level
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 font-outfit pb-10 w-full overflow-x-hidden">
       
       <div className="sticky top-0 z-30 bg-white/95 dark:bg-gray-950/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shadow-sm w-full">
@@ -208,7 +210,6 @@ function VerifyContent() {
               <div className="min-w-0 flex-1 pr-2">
                 <p className={`text-[10px] font-bold uppercase tracking-wider opacity-80 ${data.status === "ACTIVE" ? "text-green-50" : "text-gray-500"}`}>Status</p>
                 <h2 className={`text-xl font-bold truncate ${data.status === "ACTIVE" ? "text-white" : "text-red-600"}`}>{data.status}</h2>
-                {/* FIX 2: Break-words and max-width on Rejection Reason */}
                 {data.status === "BLACKLISTED" && <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded w-fit max-w-full break-words">{data.rejectionReason}</p>}
               </div>
               {data.status === "ACTIVE" ? <CheckCircle2 className="w-8 h-8 text-white/80 shrink-0" /> : <XCircle className="w-8 h-8 text-red-500 shrink-0" />}
@@ -217,7 +218,6 @@ function VerifyContent() {
             {/* Core Identity Details */}
             <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3 w-full min-w-0">
               <div className="min-w-0">
-                {/* FIX 3: break-all forces wrapping on massive unbroken strings */}
                 <h3 className="text-xl font-black text-gray-900 dark:text-white leading-tight break-all max-w-full line-clamp-3">{data.fullName}</h3>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                   <span className="text-xs font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-300">{data.aadharNumber}</span>
@@ -278,10 +278,47 @@ function VerifyContent() {
                 </div>
               )}
 
-              {/* FIX 4: min-w-0 and break-all on Address */}
               <div className="flex items-start gap-2 pt-1 w-full min-w-0">
                 <MapPin className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
                 <p className="text-xs text-gray-600 dark:text-gray-400 leading-snug break-all min-w-0 flex-1">{data.currentAddress} - {data.currentPincode}</p>
+              </div>
+            </div>
+
+            {/* 3-YEAR CYCLE PROGRESS & HISTORY BAR */}
+            <div className="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-2xl border border-purple-100 dark:border-purple-900/30 shadow-sm w-full min-w-0">
+              <div className="flex justify-between items-center mb-2 w-full gap-2 min-w-0">
+                <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300 min-w-0">
+                  <CalendarDays className="w-4 h-4 shrink-0" />
+                  <span className="text-xs font-bold uppercase tracking-wider truncate">3-Year Cycle</span>
+                </div>
+                <span className="text-xs font-bold text-purple-700 dark:text-purple-300 shrink-0">
+                  Year {Math.min((data.distributedYears?.length || 0) + 1, 3)} of 3
+                </span>
+              </div>
+              <div className="h-2 w-full bg-purple-100 dark:bg-purple-900/50 rounded-full overflow-hidden flex">
+                <div 
+                  style={{ width: `${((data.distributedYears?.length || 0) / 3) * 100}%` }} 
+                  className="bg-purple-600 h-full transition-all duration-500" 
+                />
+              </div>
+              <p className="text-[10px] text-purple-600 dark:text-purple-400 mt-2 font-medium truncate">
+                Valid until: {data.verificationCycle?.endDate ? new Date(data.verificationCycle.endDate).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }) : 'N/A'}
+              </p>
+
+              {/* NEW: COLLECTION HISTORY */}
+              <div className="mt-3 pt-3 border-t border-purple-200/50 dark:border-purple-800/50">
+                <p className="text-[10px] text-purple-500 font-bold uppercase mb-2 tracking-widest">Collected Years</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {data.distributedYears && data.distributedYears.length > 0 ? (
+                    data.distributedYears.map((year, i) => (
+                      <span key={i} className="bg-purple-600 text-white text-[10px] font-black px-2 py-1 rounded shadow-sm">
+                        {year}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[11px] font-medium text-purple-400 dark:text-purple-500 italic">No previous collections.</span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -300,7 +337,6 @@ function VerifyContent() {
                   {data.familyMembersDetail?.map((m: any, idx: number) => (
                     <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl space-y-2 border border-gray-100 dark:border-gray-700 min-w-0 w-full">
                       <div className="flex justify-between items-start gap-2 min-w-0 w-full">
-                        {/* FIX 5: break-all on family member names */}
                         <div className="min-w-0 flex-1">
                           <span className="text-sm font-bold text-gray-800 dark:text-gray-200 block break-all">{m.name}</span>
                           <span className="text-[10px] text-gray-400 uppercase font-black truncate block">{m.relation} • {m.age} Yrs</span>
@@ -332,7 +368,6 @@ function VerifyContent() {
                         </div>
                       )}
 
-                      {/* FIX 6: break-words on family member notes */}
                       {m.memberNotes && (
                         <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 rounded-lg flex items-start gap-2 min-w-0">
                            <StickyNote className="w-3 h-3 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
