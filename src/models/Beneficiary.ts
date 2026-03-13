@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import mongoose, { Schema, Document, Model } from "mongoose";
-import next from "next";
 
 export interface IFamilyMember {
   name: string;
@@ -73,6 +72,17 @@ export interface IBeneficiary extends Document {
     endDate: Date;
     isFullyVerified: boolean;
   };
+
+  approvedBy: { type: string, trim: true, default: "" },
+  approvedAt: { type: Date },
+
+
+  // 🌟 NEW: Archive for old 3-year cycles
+  pastCycles: {
+    startDate: Date;
+    endDate: Date;
+    distributedYears: number[];
+  }[];
 
   distributedYears: number[];
 
@@ -209,6 +219,21 @@ const BeneficiarySchema = new Schema<
       startDate: { type: Date, default: Date.now },
       endDate: { type: Date },
       isFullyVerified: { type: Boolean, default: true },
+    },
+
+    approvedBy: { type: String, trim: true, default: "" },
+    approvedAt: { type: Date },
+
+    // 🌟 NEW: Archive for old 3-year cycles safely typed for Mongoose
+    pastCycles: {
+      type: [
+        {
+          startDate: { type: Date },
+          endDate: { type: Date },
+          distributedYears: { type: [Number], default: [] },
+        }
+      ],
+      default: []
     },
 
     distributedYears: { type: [Number], default: [] },

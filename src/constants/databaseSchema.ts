@@ -3,7 +3,7 @@
 export const DATABASE_COLLECTIONS = [
   "beneficiaries",
   "users",
-  "dailychallans", // <-- NEW
+  "dailychallans", 
   "counters",
   "inventories",
   "webconfigs",
@@ -83,6 +83,13 @@ export const COLLECTION_SCHEMAS = {
         "status",
         "tokenNumber"
       ],
+      // 🌟 NEW: Added the pastCycles archive structure here
+      pastCycles: [
+        "_id",
+        "startDate",
+        "endDate",
+        "distributedYears"
+      ],
     },
   },
 
@@ -93,13 +100,13 @@ export const COLLECTION_SCHEMAS = {
       "challanNumber", 
       "collectionDate",
       "baitulmalReceiptBookNumber", 
-      "baitulmalFrom", // <-- ADDED
-      "baitulmalTo",   // <-- ADDED
+      "baitulmalFrom", 
+      "baitulmalTo",   
       "baitulmalCash", 
       "baitulmalOnline",
       "madarsaReceiptBookNumber", 
-      "madarsaFrom",   // <-- ADDED
-      "madarsaTo",     // <-- ADDED
+      "madarsaFrom",   
+      "madarsaTo",     
       "madarsaCash", 
       "madarsaOnline",
       "fitraCash", 
@@ -111,8 +118,7 @@ export const COLLECTION_SCHEMAS = {
       "submittedBy", 
       "submittedByName", 
       "submittedAt",
-      "approvedBy", 
-      "approvedByName", 
+      "approvedBy",  
       "approvedAt", 
       "adminNotes",
       "createdAt",
@@ -123,7 +129,7 @@ export const COLLECTION_SCHEMAS = {
     arrayOfObjects: {
       receiptBreakdown: [
         "_id", 
-        "receiptBookNumber", // <-- Individual Receipt Book Field
+        "receiptBookNumber", 
         "receiptNumber", 
         "fundCategory", 
         "paymentMode", 
@@ -134,7 +140,6 @@ export const COLLECTION_SCHEMAS = {
   },
 
   users: {
-    // Added the new Collection permission flags here!
     flatFields: [
       "_id", "name", "email", "role", "createdAt", "isApproved", 
       "resetToken", "resetTokenExpiry",
@@ -176,5 +181,5 @@ export function getFlatPathsForCollection(collectionName: keyof typeof COLLECTIO
     fields.forEach((field : any) => paths.push(`${arrName}.${field}`));
   });
 
-  return paths.sort(); // Returns alphabetically sorted array of all database fields
+  return paths.sort(); 
 }

@@ -3,36 +3,26 @@
 
 import { connectDB } from "@/lib/mongoose";
 import mongoose from "mongoose";
-import User from "@/models/User";
-import Beneficiary from "@/models/Beneficiary";
 import { getSession } from "./authActions";
 import { revalidatePath } from "next/cache";
-
-const MODEL_MAP: Record<string, mongoose.Model<any>> = {
-  User: User,
-  Beneficiary: Beneficiary,
-};
+import { COLLECTION_SCHEMAS } from "@/constants/databaseSchema";
 
 /**
- * FETCH ALL BACKUPS FOR A MODEL
+ * FETCH ALL BACKUPS FOR A COLLECTION
  */
-export async function getBackups(modelName: string) {
+export async function getBackups(collectionName: string) {
   const session = await getSession();
   if (session?.role !== "SUPER_ADMIN") throw new Error("Unauthorized");
   
   await connectDB();
-  const Model = MODEL_MAP[modelName];
-  if (!Model) return [];
-
   const db = mongoose.connection.db;
   if (!db) throw new Error("Database not connected");
 
   const collections = await db.listCollections().toArray();
-  const baseName = Model.collection.name;
   
   // Find collections starting with original name + _backup_
   return collections
-    .filter(c => c.name.startsWith(`${baseName}_backup_`))
+    .filter(c => c.name.startsWith(`${collectionName}_backup_`))
     .map(c => c.name)
     .sort()
     .reverse(); // Show newest first
@@ -41,26 +31,26 @@ export async function getBackups(modelName: string) {
 /**
  * RESTORE A COLLECTION FROM A BACKUP
  */
-export async function restoreBackup(modelName: string, backupCollectionName: string) {
+export async function restoreBackup(collectionName: string, backupCollectionName: string) {
   const session = await getSession();
   if (session?.role !== "SUPER_ADMIN") throw new Error("Unauthorized");
 
   await connectDB();
-  const Model = MODEL_MAP[modelName];
-  const targetName = Model.collection.name;
+  const db = mongoose.connection.db;
+  if (!db) throw new Error("Database not connected");
 
   try {
     // 1. Delete current data (destructive)
-    await Model.deleteMany({});
+    await db.collection(collectionName).deleteMany({});
     
     // 2. Use aggregation to push data from backup to the main collection
-    await mongoose.connection.db?.collection(backupCollectionName).aggregate([
+    await db.collection(backupCollectionName).aggregate([
         { $match: {} },
-        { $out: targetName }
+        { $out: collectionName }
     ]).toArray();
 
-    revalidatePath("/");
-    return { success: true, message: `Successfully restored ${modelName}s from ${backupCollectionName}` };
+    revalidatePath("/", "layout");
+    return { success: true, message: `Successfully restored ${collectionName} from ${backupCollectionName}` };
   } catch (error: any) {
     return { success: false, message: error.message };
   }
@@ -86,15 +76,13 @@ export async function deleteBackup(backupCollectionName: string) {
 }
 
 /**
- * RUN DYNAMIC MIGRATION
+ * 🌟 SMART DYNAMIC MIGRATION ENGINE 🌟
  */
-// Update the executeDynamicMigration function signature and logic:
 export async function executeDynamicMigration(formData: {
-  modelName: string;
+  collectionName: string;
   fieldName: string;
   defaultValue: any;
   valueType: "string" | "number" | "boolean" | "json";
-  isNested: boolean;
   shouldBackup: boolean;
   operationType: "add" | "remove";
 }) {
@@ -102,35 +90,43 @@ export async function executeDynamicMigration(formData: {
   if (session?.role !== "SUPER_ADMIN") throw new Error("Unauthorized");
 
   await connectDB();
-  const Model = MODEL_MAP[formData.modelName];
-  if (!Model) return { success: false, message: "Model mapping not found" };
+  const db = mongoose.connection.db;
+  if (!db) throw new Error("Database not connected");
 
-  // Use the raw collection to bypass Mongoose Schema validation/strictness
-  const rawCollection = Model.collection;
-  const collectionName = rawCollection.name;
+  const rawCollection = db.collection(formData.collectionName);
+  const schemaDef = (COLLECTION_SCHEMAS as any)[formData.collectionName];
 
   try {
     // --- STEP 1: BACKUP ---
     if (formData.shouldBackup) {
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const backupCollectionName = `${collectionName}_backup_${timestamp}`;
+      const backupCollectionName = `${formData.collectionName}_backup_${timestamp}`;
       await rawCollection.aggregate([{ $match: {} }, { $out: backupCollectionName }]).toArray();
+    }
+
+    // --- STEP 2: SMART PATH RESOLUTION ---
+    let mongoUpdatePath = formData.fieldName;
+
+    // If the path has a dot, we need to check if the root is an Array of Objects
+    if (formData.fieldName.includes(".") && schemaDef) {
+      const parts = formData.fieldName.split(".");
+      const rootKey = parts[0];
+
+      // Check the schema! Is this root key an Array of Objects? (e.g. pastCycles or familyMembersDetail)
+      if (schemaDef.arrayOfObjects && schemaDef.arrayOfObjects[rootKey]) {
+        // Automatically inject the MongoDB Array Positional Operator: $[]
+        // Converts "pastCycles.newField" into "pastCycles.$[].newField"
+        parts.splice(1, 0, "$[]");
+        mongoUpdatePath = parts.join(".");
+      }
+      // If it is just a normal object (like todayStatus.newField), we leave it exactly as typed!
     }
 
     let result;
 
-    // --- STEP 2: MIGRATION LOGIC ---
+    // --- STEP 3: MIGRATION LOGIC ---
     if (formData.operationType === "remove") {
-      if (formData.isNested) {
-        const [arrayName, nestedField] = formData.fieldName.split(".");
-        // Raw MongoDB syntax for unsetting inside every array element
-        result = await rawCollection.updateMany(
-          {}, 
-          { $unset: { [`${arrayName}.$[].${nestedField}`]: "" } } as any
-        );
-      } else {
-        result = await rawCollection.updateMany({}, { $unset: { [formData.fieldName]: "" } });
-      }
+      result = await rawCollection.updateMany({}, { $unset: { [mongoUpdatePath]: "" } } as any);
     } else {
       // --- SANITIZE VALUE ---
       let finalValue: any = formData.defaultValue;
@@ -145,34 +141,27 @@ export async function executeDynamicMigration(formData: {
         try { 
           finalValue = finalValue ? JSON.parse(finalValue) : {}; 
         } catch (e) { 
-          throw new Error("Invalid JSON format."); 
+          throw new Error("Invalid JSON format. Make sure to use double quotes around keys."); 
+        }
+      } else if (formData.valueType === "date") {
+        // 🌟 NEW: SMART DATE HANDLING 🌟
+        if (formData.defaultValue === "__NULL__") {
+          finalValue = null; // Explicitly set to MongoDB Null
+        } else if (formData.defaultValue === "__CURRENT__") {
+          finalValue = new Date(); // Set to exactly right now
+        } else {
+          finalValue = new Date(formData.defaultValue); // Parse the custom user date
         }
       }
 
-      if (formData.isNested) {
-        const [arrayName, nestedField] = formData.fieldName.split(".");
-        if (!nestedField) throw new Error("Use format: arrayName.fieldName");
-        
-        // Use raw collection to force update array elements
-        result = await rawCollection.updateMany(
-          {}, 
-          { $set: { [`${arrayName}.$[].${nestedField}`]: finalValue } } as any
-        );
-      } else {
-        // FORCE UPDATE using raw collection (This bypasses Mongoose schema checks)
-        result = await rawCollection.updateMany(
-          {}, 
-          { $set: { [formData.fieldName]: finalValue } }
-        );
-      }
+      result = await rawCollection.updateMany({}, { $set: { [mongoUpdatePath]: finalValue } } as any);
     }
 
-    // Clear caches
     revalidatePath("/", "layout"); 
     
     return { 
       success: true, 
-      message: `Success! Modified ${result.modifiedCount} docs in ${collectionName} using Raw Collection Access.` 
+      message: `Success! Modified ${result.modifiedCount} docs. Target Path used: [${mongoUpdatePath}]` 
     };
   } catch (error: any) {
     console.error("Migration Error:", error);

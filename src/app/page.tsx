@@ -361,6 +361,26 @@ export default function DashboardPage() {
                 </button>
               )}
 
+              {hasAdminAccess && (
+                <button
+                  onClick={() => handleBack("/admin/master-search")}
+                  className="col-span-2 flex items-center justify-between p-4 bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/10 rounded-[2rem] shadow-sm active:scale-95 transition-all text-left border border-violet-200 dark:border-violet-900/30"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="bg-gradient-to-br from-violet-400 to-purple-600 p-3 rounded-2xl w-fit shadow-md">
+                      <Search className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-gray-900 dark:text-white text-sm">Master Profile Search</h3>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 uppercase font-bold tracking-tighter">
+                        Search all details instantly
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-purple-300 dark:text-purple-700 mr-2" />
+                </button>
+              )}
+
               {/* --- NEW BAITULMAL COLLECTION CARD --- */}
               {session?.hasCollectionAccess && (
                 <button
@@ -380,6 +400,7 @@ export default function DashboardPage() {
                   </div>
                   <ChevronRight className="w-5 h-5 text-amber-300 dark:text-amber-700 mr-2" />
                 </button>
+
               )}
             </div>
           </section>

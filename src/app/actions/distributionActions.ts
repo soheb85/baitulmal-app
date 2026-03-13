@@ -190,13 +190,26 @@ export async function renewVerificationCycle(id: string) {
     if (!person) return { success: false, message: "User not found" };
 
     const now = new Date();
-    const newExpiry = new Date(now); // Copy the current date
+    const newExpiry = new Date(now); 
     
     // Add 3 Gregorian years
     newExpiry.setFullYear(newExpiry.getFullYear() + 3);
-    // NEW: Subtract 45 days for the Lunar Calendar shift (Ramadan offset)
+    // Subtract 45 days for the Lunar Calendar shift (Ramadan offset)
     newExpiry.setDate(newExpiry.getDate() - 45);
 
+    // 🌟 1. ARCHIVE THE OLD CYCLE BEFORE OVERWRITING 🌟
+    if (person.verificationCycle) {
+      person.pastCycles.push({
+        startDate: person.verificationCycle.startDate,
+        endDate: person.verificationCycle.endDate,
+        distributedYears: [...person.distributedYears], // Clone the old array safely
+      });
+    }
+
+    // 🌟 2. RESET FOR THE NEW CYCLE 🌟
+    person.distributedYears = []; // This resets the UI progress bar back to 0
+
+    // 3. Set the new active cycle
     person.verificationCycle = {
       startDate: now,
       endDate: newExpiry,
@@ -212,7 +225,7 @@ export async function renewVerificationCycle(id: string) {
         await logAction(
           "RE_VERIFY",
           person.fullName,
-          `3-Year cycle renewed (Lunar Adjusted). New expiry: ${newExpiry.toLocaleDateString("en-IN")}`
+          `3-Year cycle renewed. Previous cycle safely archived. New expiry: ${newExpiry.toLocaleDateString("en-IN")}`
         );
     } catch(e) {
         console.error("Logger Failed for RE_VERIFY:", e);
@@ -220,8 +233,9 @@ export async function renewVerificationCycle(id: string) {
 
     revalidatePath("/distribution/check-in");
     revalidatePath(`/beneficiaries/${id}`);
+    revalidatePath("/admin/master-search"); // Refresh the master search UI too
 
-    return { success: true, message: "Cycle renewed safely for 3 more Ramadans!" };
+    return { success: true, message: "Cycle renewed safely! Old record archived." };
   } catch (error: any) {
     return { success: false, message: error.message };
   }

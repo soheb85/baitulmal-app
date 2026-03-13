@@ -5,63 +5,65 @@ import { connectDB } from "@/lib/mongoose";
 import Beneficiary from "@/models/Beneficiary";
 import { revalidatePath } from "next/cache";
 import { logAction } from "@/lib/logger"; 
-import { getSession } from "./authActions"; // Import to get current Admin details
+import { getSession } from "./authActions";
 
 export async function updateBeneficiaryStatus(
   id: string, 
   newStatus: "ACTIVE" | "BLACKLISTED" | "ON_HOLD", 
-  reason?: string
+  authority: string, 
+  reason?: string,
+  customDateString?: string
 ) {
   await connectDB();
 
   try {
-    // 1. Get current session to identify the Admin
     const session = await getSession();
     const adminName = session?.name || "System Admin";
+    
+    const actionDate = customDateString ? new Date(customDateString) : new Date();
+    const dateString = actionDate.toLocaleDateString("en-IN"); 
 
-    // 2. Logic Check: If Blacklisting, reason is mandatory
-    if (newStatus === "BLACKLISTED" && !reason) {
-      return { success: false, message: "Reason is required for blacklisting." };
+    let updateData: any = {};
+    let logDetails = "";
+
+    if (newStatus === "ACTIVE") {
+      const approvalText = `Approved By ${authority} on ${dateString}`;
+      updateData = {
+        status: "ACTIVE",
+        approvedBy: authority,
+        approvedAt: actionDate, 
+        rejectionReason: "",
+        rejectionBy: "",
+        comments: `[${approvalText}]`
+      };
+      logDetails = `Status updated to ACTIVE. ${approvalText} (Action by ${adminName})`;
+
+    } else if (newStatus === "BLACKLISTED") {
+      if (!reason) return { success: false, message: "Reason is required for blacklisting." };
+      
+      const rejectionText = `Blocked/Rejected By ${authority} on ${dateString}. Reason: ${reason}`;
+      updateData = {
+        status: "BLACKLISTED",
+        rejectionReason: rejectionText,
+        rejectionBy: authority,
+        approvedBy: "",
+        approvedAt: null
+      };
+      logDetails = `Status updated to BLACKLISTED. ${rejectionText} (Action by ${adminName})`;
     }
 
-    // 3. Perform the update
-    // If ACTIVE, we clear the rejection data. If BLACKLISTED, we save the admin name.
-    const updateData: any = {
-        status: newStatus,
-        rejectionReason: newStatus === "BLACKLISTED" ? reason : "",
-        rejectionBy: newStatus === "BLACKLISTED" ? adminName : "" 
-    };
+    // 🌟 FIXED DEPRECATION WARNING HERE 🌟
+    const updatedPerson = await Beneficiary.findByIdAndUpdate(id, updateData, { returnDocument: 'after' });
+    
+    if (!updatedPerson) return { success: false, message: "Beneficiary not found" };
 
-    const updatedPerson = await Beneficiary.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true }
-    );
+    await logAction("STATUS_CHANGE", updatedPerson.fullName, logDetails);
 
-    if (!updatedPerson) {
-      return { success: false, message: "Beneficiary not found" };
-    }
-
-    // --- 4. LOG: Status Change Action ---
-    const logDetails = newStatus === "BLACKLISTED" 
-      ? `Status changed to BLACKLISTED by ${adminName}. Reason: ${reason}` 
-      : `Status updated to ${newStatus} by ${adminName}`;
-
-    await logAction(
-      "STATUS_CHANGE",
-      updatedPerson.fullName,
-      logDetails
-    );
-
-    // 5. Refresh Cache for all relevant pages
     revalidatePath("/verify");
     revalidatePath(`/beneficiaries/${id}`);
-    revalidatePath("/beneficiaries");
+    revalidatePath("/admin/master-search");
     
-    return { 
-        success: true, 
-        message: `Status updated to ${newStatus} by ${adminName}` 
-    };
+    return { success: true, message: `Successfully marked as ${newStatus}` };
 
   } catch (error) {
     console.error("Update Error:", error);
