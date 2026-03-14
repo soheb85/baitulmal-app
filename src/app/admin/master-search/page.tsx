@@ -112,6 +112,8 @@ export default function MasterSearchPage() {
   const isBlacklisted = data?.status === 'BLACKLISTED';
   const hasAddressMismatch = data?.aadharPincode !== data?.currentPincode;
   const hasPastCycles = data?.pastCycles && data.pastCycles.length > 0;
+  const hasApproval = Boolean(data?.approvedBy && data.approvedBy.trim().length > 0 && data?.status === 'ACTIVE');
+  const hasRejection = Boolean(data?.status === "BLACKLISTED" || (data?.rejectionBy && data.rejectionBy.trim().length > 0));
 
   return (
     <main className="min-h-screen flex flex-col items-center w-full max-w-md mx-auto shadow-2xl bg-gray-50 dark:bg-gray-950 relative font-outfit">
@@ -183,24 +185,47 @@ export default function MasterSearchPage() {
           <div className="space-y-4 animate-in slide-in-from-bottom-6 fade-in duration-500">
             
             {/* 0. LIVE QUEUE STATUS */}
-            {data.todayStatus?.status && (
-              <div className={`p-4 rounded-2xl border shadow-sm flex items-center justify-between ${data.todayStatus.status === 'COLLECTED' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
+            {(data.todayStatus?.status || (data.status === 'ACTIVE' && data.approvedBy && data.approvedBy.trim().length > 0)) && (
+              <div className={`p-4 rounded-2xl border shadow-sm flex items-center justify-between ${
+                data.todayStatus?.status === 'COLLECTED' 
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-300' 
+                  : data.todayStatus?.status === 'CHECKED_IN'
+                  ? 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
+                  : 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300'
+              }`}>
                  <div className="flex items-center gap-3">
-                   <div className="relative">
-                      <span className={`flex h-3 w-3 rounded-full ${data.todayStatus.status === 'COLLECTED' ? 'bg-green-500' : 'bg-blue-500 animate-ping'}`}></span>
+                   {/* Status Dot with conditional Ping animation */}
+                   <div className="relative flex h-3 w-3 shrink-0">
+                      {data.todayStatus?.status === 'CHECKED_IN' && (
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      )}
+                      <span className={`relative inline-flex rounded-full h-3 w-3 ${
+                        data.todayStatus?.status === 'COLLECTED' ? 'bg-emerald-500' :
+                        data.todayStatus?.status === 'CHECKED_IN' ? 'bg-blue-500' : 'bg-amber-500'
+                      }`}></span>
                    </div>
+                   
                    <div>
-                     <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Live Status</p>
-                     <p className="text-sm font-bold">
-                       {data.todayStatus.status === 'CHECKED_IN' ? 'Currently in Queue' : `Ration Collected ${data.distributionHistory && data.distributionHistory.length > 0 ? `on ${new Date(data.distributionHistory.slice(-1)[0].date).toLocaleDateString("en-IN")}` : ''}`}
+                     <p className="text-[10px] font-black uppercase tracking-widest opacity-70">
+                        {data.todayStatus?.status ? 'Live Status' : 'Distribution Status'}
                      </p>
-                     {data.todayStatus.tempNote && <p className="text-xs mt-0.5 italic">&quot;{data.todayStatus.tempNote}&quot;</p>}
+                     <p className="text-sm font-bold">
+                       {data.todayStatus?.status === 'CHECKED_IN' 
+                         ? 'Currently in Queue' 
+                         : data.todayStatus?.status === 'COLLECTED' 
+                         ? `Ration Collected ${data.distributionHistory && data.distributionHistory.length > 0 ? `on ${new Date(data.distributionHistory.slice(-1)[0].date).toLocaleDateString("en-IN")}` : ''}`
+                         : 'Pending to Collect'
+                       }
+                     </p>
+                     {data.todayStatus?.tempNote && <p className="text-xs mt-0.5 italic font-medium opacity-80">&quot;{data.todayStatus.tempNote}&quot;</p>}
                    </div>
                  </div>
-                 {data.todayStatus.tokenNumber && (
-                   <div className="text-center bg-white/50 px-3 py-1 rounded-xl">
-                     <p className="text-[9px] font-black uppercase">Token</p>
-                     <p className="text-xl font-black">#{data.todayStatus.tokenNumber}</p>
+
+                 {/* Token Box (Only shows if they have a token) */}
+                 {data.todayStatus?.tokenNumber && (
+                   <div className="text-center bg-white/60 dark:bg-black/20 px-3 py-1.5 rounded-xl border border-white/30 dark:border-white/5 shrink-0">
+                     <p className="text-[9px] font-black uppercase opacity-80">Token</p>
+                     <p className="text-xl font-black leading-none">#{data.todayStatus.tokenNumber}</p>
                    </div>
                  )}
               </div>
@@ -288,77 +313,76 @@ export default function MasterSearchPage() {
                 </div>
             </div>
 
-            {/* 🌟 2. DISPLAY RECORD: VERIFICATION & NOTES 🌟 */}
-            <div className="grid grid-cols-1 gap-4 w-full min-w-0">
-              
-              {/* Dynamic Verification Card (Green for Approved, Red for Rejected) */}
-              {(data.approvedBy || data.rejectionBy) && (
-                <div className={`relative p-5 rounded-[2rem] border shadow-sm w-full overflow-hidden ${
-                  data.status === 'ACTIVE' 
-                    ? 'bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-900/50' 
-                    : 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50'
-                }`}>
-                  <div className="flex items-start gap-4 relative z-10">
-                    <div className={`p-3 rounded-2xl shrink-0 shadow-sm ${
-                      data.status === 'ACTIVE' 
-                        ? 'bg-gradient-to-br from-teal-400 to-teal-600 text-white'
-                        : 'bg-gradient-to-br from-rose-500 to-rose-600 text-white'
-                    }`}>
-                      {data.status === 'ACTIVE' ? <ShieldCheck className="w-6 h-6" /> : <ShieldAlert className="w-6 h-6" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className={`font-black uppercase text-[10px] tracking-[0.2em] mb-1 ${
-                        data.status === 'ACTIVE' ? 'text-teal-700 dark:text-teal-400' : 'text-rose-700 dark:text-rose-400'
-                      }`}>
-                        {data.status === 'ACTIVE' ? 'Officially Verified' : 'Account Restricted'}
-                      </h3>
-                      
-                      <div className={`p-3 rounded-xl border mt-2 ${
-                        data.status === 'ACTIVE' 
-                          ? 'bg-teal-100/50 dark:bg-black/20 border-teal-200/50 dark:border-white/5'
-                          : 'bg-rose-100/50 dark:bg-black/20 border-rose-200/50 dark:border-white/5'
-                      }`}>
-                        <p className={`text-xs font-bold leading-relaxed ${
-                          data.status === 'ACTIVE' ? 'text-teal-900 dark:text-teal-200' : 'text-rose-900 dark:text-rose-200'
-                        }`}>
-                          {data.status === 'ACTIVE' 
-                            ? `Approved by: ${data.approvedBy}` 
-                            : `Rejected by: ${data.rejectionBy || 'System Admin'}`
-                          }
-                        </p>
-                        {/* Show rejection reason clearly inside the red box */}
-                        {data.status === 'BLACKLISTED' && data.rejectionReason && (
-                          <p className="text-[11px] font-black text-rose-800 dark:text-rose-300 mt-1 italic break-words border-t border-rose-200/50 pt-1">
-                            &quot;{data.rejectionReason}&quot;
-                          </p>
-                        )}
-                      </div>
-                      
-                      {(data.approvedAt || data.updatedAt) && (
-                        <p className={`text-[8px] font-black uppercase tracking-widest mt-2 opacity-60 ${
-                          data.status === 'ACTIVE' ? 'text-teal-800 dark:text-teal-200' : 'text-rose-800 dark:text-rose-200'
-                        }`}>
-                          Date of Decision: {new Date(data.approvedAt || data.updatedAt).toLocaleDateString("en-IN")}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+            {/* 🌟 NEW: DISPLAY VERIFICATION RECORD & ADMIN NOTES 🌟 */}
+           <div className="grid grid-cols-1 gap-4 mb-6 w-full min-w-0">
+             
+             {/* Dynamic Verification Card */}
+             {(hasApproval || hasRejection) && (
+               <div className={`relative p-4 rounded-2xl border shadow-sm w-full overflow-hidden ${
+                 hasApproval
+                   ? 'bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-900/50' 
+                   : 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50'
+               }`}>
+                 <div className="flex items-start gap-4 relative z-10">
+                   <div className={`p-2.5 rounded-xl shrink-0 shadow-sm ${
+                     hasApproval 
+                       ? 'bg-gradient-to-br from-teal-400 to-teal-600 text-white'
+                       : 'bg-gradient-to-br from-rose-500 to-rose-600 text-white'
+                   }`}>
+                     {hasApproval ? <ShieldCheck className="w-5 h-5" /> : <ShieldAlert className="w-5 h-5" />}
+                   </div>
+                   <div className="min-w-0 flex-1">
+                     <h3 className={`font-black uppercase text-[10px] tracking-[0.2em] mb-1 ${
+                       hasApproval ? 'text-teal-700 dark:text-teal-400' : 'text-rose-700 dark:text-rose-400'
+                     }`}>
+                       {hasApproval ? 'Officially Verified' : 'Account Restricted'}
+                     </h3>
+                     
+                     <div className={`p-2.5 rounded-xl border mt-1.5 ${
+                       hasApproval 
+                         ? 'bg-teal-100/50 dark:bg-black/20 border-teal-200/50 dark:border-white/5'
+                         : 'bg-rose-100/50 dark:bg-black/20 border-rose-200/50 dark:border-white/5'
+                     }`}>
+                       <p className={`text-xs font-bold leading-relaxed ${
+                         hasApproval ? 'text-teal-900 dark:text-teal-200' : 'text-rose-900 dark:text-rose-200'
+                       }`}>
+                         {hasApproval 
+                           ? `Approved by: ${data.approvedBy}` 
+                           : `Rejected by: ${data.rejectionBy || 'System Admin'}`
+                         }
+                       </p>
+                       {hasRejection && data.rejectionReason && (
+                         <p className="text-[10px] font-black text-rose-800 dark:text-rose-300 mt-1 italic break-words border-t border-rose-200/50 pt-1">
+                           &quot;{data.rejectionReason}&quot;
+                         </p>
+                       )}
+                     </div>
+                     
+                     {(data.approvedAt || data.updatedAt) && (
+                       <p className={`text-[8px] font-black uppercase tracking-widest mt-1.5 opacity-60 ${
+                         hasApproval ? 'text-teal-800 dark:text-teal-200' : 'text-rose-800 dark:text-rose-200'
+                       }`}>
+                         Date of Decision: {new Date(data.approvedAt || data.updatedAt!).toLocaleDateString("en-IN")}
+                       </p>
+                     )}
+                   </div>
+                 </div>
+               </div>
+             )}
 
-              {/* Admin Notes / Remarks Card */}
-              {data.comments && (
-                  <div className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-[2rem] border border-amber-200 dark:border-amber-900/50 shadow-sm w-full flex gap-3 items-start">
-                      <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-xl shrink-0">
-                        <FileEdit className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest mb-1">Admin Remarks</h3>
-                        <p className="text-sm text-amber-900 dark:text-amber-100 font-bold leading-relaxed break-words italic">&quot;{data.comments}&quot;</p>
-                      </div>
-                  </div>
-              )}
-            </div>
+             {/* Admin Notes / Remarks Card */}
+             {data.comments && (
+                 <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/50 shadow-sm w-full flex gap-3 items-start">
+                     <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-xl shrink-0">
+                       <FileEdit className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                     </div>
+                     <div className="min-w-0 flex-1">
+                       <h3 className="text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest mb-1">Admin Remarks</h3>
+                       <p className="text-xs text-amber-900 dark:text-amber-100 font-bold leading-relaxed break-words italic">&quot;{data.comments}&quot;</p>
+                     </div>
+                 </div>
+             )}
+           </div>
 
             {/* 🌟 3. NEW ACTION DESK (Approve/Reject directly from Search) 🌟 */}
             <div className="bg-white dark:bg-gray-900 p-5 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-sm w-full">
@@ -618,6 +642,56 @@ export default function MasterSearchPage() {
                   )}
                 </div>
             </section>
+
+            {/* 🌟 PERFECT MATCH "PROBLEM REPORTED" DARK CARD 🌟 */}
+            {data.problems && data.problems.length > 0 && (
+              <div className="bg-[#0f111a] border border-rose-900/50 rounded-[2rem] p-5 shadow-lg w-full min-w-0 relative overflow-hidden">
+                {/* Subtle Red Glow in background */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 blur-3xl pointer-events-none" />
+                
+                {/* Header */}
+                <div className="flex items-start gap-4 mb-5 relative z-10">
+                  <div className="p-3 bg-rose-500/10 rounded-2xl text-rose-500 border border-rose-500/20 shadow-sm shrink-0">
+                    <AlertTriangle className="w-6 h-6" />
+                  </div>
+                  <div className="flex flex-col pt-1">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-500 mb-1">Problem Reported</h3>
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full bg-rose-600 flex items-center justify-center shrink-0 shadow-md">
+                        <span className="text-[10px] font-black text-white leading-none">{data.problems.length}</span>
+                      </div>
+                      <p className="text-[9px] font-bold text-rose-500/90 uppercase tracking-[0.1em] leading-none">Key Concerns Identified</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Problem List */}
+                <div className="flex flex-col gap-2.5 relative z-10">
+                  {data.problems.map((problem: string, i: number) => (
+                    <div key={i} className="flex items-center gap-3 px-4 py-3.5 bg-[#16131c] border border-rose-900/30 rounded-[1.2rem]">
+                      <div className="shrink-0"><div className="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]"></div></div>
+                      <span className="text-xs font-bold text-rose-100/90 leading-snug break-words capitalize">{problem}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Footer details */}
+                <div className="mt-5 pt-4 border-t border-gray-800/80 flex justify-between items-center relative z-10">
+                   <div className="flex items-center gap-3">
+                     <div className="w-8 h-8 rounded-full bg-teal-500/10 text-teal-400 flex items-center justify-center text-xs font-black border border-teal-500/20">
+                        {data.createdBy ? data.createdBy.charAt(0).toUpperCase() : "A"}
+                     </div>
+                     <div>
+                        <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest leading-none mb-1">Register By</p>
+                        <p className="text-xs font-bold text-gray-200 leading-none">{data.createdBy || "Admin"}</p>
+                     </div>
+                   </div>
+                   <div className="px-3 py-2 bg-[#1c1f2e] text-gray-400 rounded-xl text-[8px] font-black uppercase tracking-widest">
+                      Source: Web App
+                   </div>
+                </div>
+              </div>
+            )}
 
             {/* 6. HOUSEHOLD & ECONOMY */}
             <section className="bg-white dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-sm w-full min-w-0">
