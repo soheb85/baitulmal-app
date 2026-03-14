@@ -11,7 +11,7 @@ import {
   Search, Loader2, ShieldCheck, MapPin, 
   CreditCard, Phone, ArrowLeft, CheckCircle2, AlertTriangle, Clock, 
   Home, Banknote, RefreshCw, QrCode, X,
-  Briefcase, IndianRupee, School, CalendarDays
+  Briefcase, IndianRupee, School, CalendarDays, ShieldAlert, FileEdit
 } from "lucide-react";
 import { Scanner } from '@yudiel/react-qr-scanner';
 
@@ -96,7 +96,6 @@ function CheckInContent() {
                   <p className="text-red-800 dark:text-red-200 font-bold flex items-center justify-center gap-2">
                       <AlertTriangle className="w-5 h-5 shrink-0" /> Distribution Blocked
                   </p>
-                  {/* Fixed Rejection Reason stretching */}
                   <p className="text-sm text-red-700 dark:text-red-300 mt-1 break-words max-w-full">{data.rejectionReason}</p>
               </div>
           );
@@ -151,41 +150,44 @@ function CheckInContent() {
       }
 
       return (
-  <div className="sticky bottom-4 z-10 pt-2 w-full space-y-3">
-    {/* NEW: Temporary Note Input */}
-    <div className="bg-white dark:bg-gray-800 p-2 rounded-2xl border border-blue-100 dark:border-blue-900 shadow-sm flex items-center gap-2">
-      <div className="bg-blue-50 dark:bg-blue-900/40 p-2 rounded-xl shrink-0">
-        <RefreshCw className="w-4 h-4 text-blue-600" />
-      </div>
-      <input 
-        type="text"
-        value={tempNote}
-        onChange={(e) => setTempNote(e.target.value)}
-        placeholder="Excel Row / Note (Optional)"
-        className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-gray-700 dark:text-gray-200 placeholder:text-gray-400 placeholder:font-normal"
-      />
-    </div>
+        <div className="sticky bottom-4 z-10 pt-2 w-full space-y-3">
+          {/* NEW: Temporary Note Input */}
+          <div className="bg-white dark:bg-gray-800 p-2 rounded-2xl border border-blue-100 dark:border-blue-900 shadow-sm flex items-center gap-2">
+            <div className="bg-blue-50 dark:bg-blue-900/40 p-2 rounded-xl shrink-0">
+              <RefreshCw className="w-4 h-4 text-blue-600" />
+            </div>
+            <input 
+              type="text"
+              value={tempNote}
+              onChange={(e) => setTempNote(e.target.value)}
+              placeholder="Excel Row / Note (Optional)"
+              className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-gray-700 dark:text-gray-200 placeholder:text-gray-400 placeholder:font-normal"
+            />
+          </div>
 
-    <button 
-        onClick={handleCheckIn}
-        disabled={processing}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-xl flex items-center justify-center gap-3 text-lg active:scale-95 transition-all"
-    >
-        {processing ? <Loader2 className="animate-spin w-6 h-6 shrink-0" /> : (
-        <>
-            <ShieldCheck className="w-6 h-6 shrink-0" />
-            <span className="truncate">VERIFY & GENERATE TOKEN</span>
-        </>
-        )}
-    </button>
-  </div>
-);
+          <button 
+              onClick={handleCheckIn}
+              disabled={processing}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-xl flex items-center justify-center gap-3 text-lg active:scale-95 transition-all"
+          >
+              {processing ? <Loader2 className="animate-spin w-6 h-6 shrink-0" /> : (
+              <>
+                  <ShieldCheck className="w-6 h-6 shrink-0" />
+                  <span className="truncate">VERIFY & GENERATE TOKEN</span>
+              </>
+              )}
+          </button>
+        </div>
+      );
   };
 
   if (isNavigating) return <NavigationLoader message="Returning..." />;
 
+  // 🌟 LOGIC FLAGS FOR VERIFICATION CARD 🌟
+  const hasApproval = Boolean(data?.approvedBy && data.approvedBy.trim().length > 0 && data?.status === 'ACTIVE');
+  const hasRejection = Boolean(data?.status === "BLACKLISTED" || (data?.rejectionBy && data.rejectionBy.trim().length > 0));
+
   return (
-    // FIX 1: overflow-x-hidden on the root container
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-5 pb-32 font-outfit w-full overflow-x-hidden">
       
       {/* Header */}
@@ -234,13 +236,10 @@ function CheckInContent() {
       )}
 
       {data && (
-        // FIX 2: Overflow hidden and w-full on main card
         <div className="bg-white dark:bg-gray-900 p-5 rounded-3xl shadow-lg border border-gray-100 dark:border-gray-800 animate-in slide-in-from-bottom-6 w-full overflow-hidden min-w-0">
            
            <div className="flex justify-between items-start mb-6 border-b border-gray-100 dark:border-gray-800 pb-4 gap-3 w-full min-w-0">
-             {/* FIX 3: flex-1 min-w-0 on header container */}
              <div className="flex-1 min-w-0">
-                 {/* FIX 4: break-all to prevent name stretching */}
                  <h2 className="text-2xl font-black text-gray-900 dark:text-white leading-tight break-all max-w-full line-clamp-3">{data.fullName}</h2>
                  <div className="flex flex-wrap items-center gap-2 mt-1 text-gray-500 dark:text-gray-400">
                     <span className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded uppercase font-bold shrink-0">{data.gender}</span>
@@ -248,6 +247,77 @@ function CheckInContent() {
                  </div>
              </div>
              <span className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase border shrink-0 ${data.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{data.status}</span>
+           </div>
+
+           {/* 🌟 NEW: DISPLAY VERIFICATION RECORD & ADMIN NOTES 🌟 */}
+           <div className="grid grid-cols-1 gap-4 mb-6 w-full min-w-0">
+             
+             {/* Dynamic Verification Card */}
+             {(hasApproval || hasRejection) && (
+               <div className={`relative p-4 rounded-2xl border shadow-sm w-full overflow-hidden ${
+                 hasApproval
+                   ? 'bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-900/50' 
+                   : 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50'
+               }`}>
+                 <div className="flex items-start gap-4 relative z-10">
+                   <div className={`p-2.5 rounded-xl shrink-0 shadow-sm ${
+                     hasApproval 
+                       ? 'bg-gradient-to-br from-teal-400 to-teal-600 text-white'
+                       : 'bg-gradient-to-br from-rose-500 to-rose-600 text-white'
+                   }`}>
+                     {hasApproval ? <ShieldCheck className="w-5 h-5" /> : <ShieldAlert className="w-5 h-5" />}
+                   </div>
+                   <div className="min-w-0 flex-1">
+                     <h3 className={`font-black uppercase text-[10px] tracking-[0.2em] mb-1 ${
+                       hasApproval ? 'text-teal-700 dark:text-teal-400' : 'text-rose-700 dark:text-rose-400'
+                     }`}>
+                       {hasApproval ? 'Officially Verified' : 'Account Restricted'}
+                     </h3>
+                     
+                     <div className={`p-2.5 rounded-xl border mt-1.5 ${
+                       hasApproval 
+                         ? 'bg-teal-100/50 dark:bg-black/20 border-teal-200/50 dark:border-white/5'
+                         : 'bg-rose-100/50 dark:bg-black/20 border-rose-200/50 dark:border-white/5'
+                     }`}>
+                       <p className={`text-xs font-bold leading-relaxed ${
+                         hasApproval ? 'text-teal-900 dark:text-teal-200' : 'text-rose-900 dark:text-rose-200'
+                       }`}>
+                         {hasApproval 
+                           ? `Approved by: ${data.approvedBy}` 
+                           : `Rejected by: ${data.rejectionBy || 'System Admin'}`
+                         }
+                       </p>
+                       {hasRejection && data.rejectionReason && (
+                         <p className="text-[10px] font-black text-rose-800 dark:text-rose-300 mt-1 italic break-words border-t border-rose-200/50 pt-1">
+                           &quot;{data.rejectionReason}&quot;
+                         </p>
+                       )}
+                     </div>
+                     
+                     {(data.approvedAt || data.updatedAt) && (
+                       <p className={`text-[8px] font-black uppercase tracking-widest mt-1.5 opacity-60 ${
+                         hasApproval ? 'text-teal-800 dark:text-teal-200' : 'text-rose-800 dark:text-rose-200'
+                       }`}>
+                         Date of Decision: {new Date(data.approvedAt || data.updatedAt!).toLocaleDateString("en-IN")}
+                       </p>
+                     )}
+                   </div>
+                 </div>
+               </div>
+             )}
+
+             {/* Admin Notes / Remarks Card */}
+             {data.comments && (
+                 <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/50 shadow-sm w-full flex gap-3 items-start">
+                     <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-xl shrink-0">
+                       <FileEdit className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                     </div>
+                     <div className="min-w-0 flex-1">
+                       <h3 className="text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest mb-1">Admin Remarks</h3>
+                       <p className="text-xs text-amber-900 dark:text-amber-100 font-bold leading-relaxed break-words italic">&quot;{data.comments}&quot;</p>
+                     </div>
+                 </div>
+             )}
            </div>
 
            {/* Economic Status */}
@@ -321,7 +391,6 @@ function CheckInContent() {
               
               <div className="flex gap-3 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl w-full min-w-0">
                  <MapPin className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
-                 {/* FIX 5: break-all on Address string */}
                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-800 dark:text-gray-200 leading-snug break-all max-w-full">{data.currentAddress}</p>
                     <p className="text-xs text-gray-500 mt-1 font-mono truncate">Pin: {data.currentPincode}</p>
@@ -340,7 +409,6 @@ function CheckInContent() {
                           <div className="flex items-center gap-3 min-w-0 flex-1">
                              <div className="w-8 h-8 bg-white dark:bg-gray-700 rounded-full flex items-center justify-center text-xs font-bold text-gray-500 border dark:border-gray-600 shrink-0">{m.name.charAt(0)}</div>
                              <div className="min-w-0 flex-1">
-                                {/* FIX 6: break-all on Family Member Names */}
                                 <p className="text-sm font-bold text-gray-900 dark:text-gray-100 break-all max-w-full">{m.name}</p>
                                 <div className="flex gap-2 text-[10px] text-gray-500 uppercase font-bold min-w-0"><span className="truncate">{m.relation}</span> <span className="shrink-0">• {m.age} Yrs</span></div>
                              </div>
